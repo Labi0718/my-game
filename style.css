@@ -1,0 +1,648 @@
+:root {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --card: #FFFFFF;
+  --soft: #F3F8FD;
+  --line: #DCEAF7;
+  --accent: #A8CDF0;
+  --accent-strong: #6FA8DC;
+  --mint: #CBEFE6;
+  --text: #2F4256;
+  --text-soft: #5E7388;
+  --shadow: 111 168 220;
+  font-family: "Gowun Dodum", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.page-decor {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.decor {
+  position: absolute;
+  opacity: 0.55;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  transform: rotate(-12deg);
+}
+
+.decor-ice {
+  top: 9%;
+  left: max(3%, calc((100% - 960px) / 2));
+  transform: rotate(12deg);
+}
+
+.decor-shaved-ice {
+  top: 23%;
+  right: max(4%, calc((100% - 980px) / 2));
+  transform: rotate(9deg);
+}
+
+.decor-bubbles {
+  top: 43%;
+  left: max(2%, calc((100% - 1010px) / 2));
+  transform: rotate(-8deg);
+}
+
+.decor-drink {
+  top: 61%;
+  right: max(3%, calc((100% - 990px) / 2));
+  transform: rotate(13deg);
+}
+
+.decor-ice-cream {
+  top: 79%;
+  left: max(4%, calc((100% - 970px) / 2));
+  transform: rotate(-10deg);
+}
+
+.decor-snow {
+  top: 91%;
+  right: max(5%, calc((100% - 970px) / 2));
+  transform: rotate(14deg);
+}
+
+.bubble {
+  position: absolute;
+  display: block;
+  width: var(--bubble-size);
+  aspect-ratio: 1;
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 50%;
+  background: var(--bubble-color);
+  box-shadow: 0 2px 8px rgb(var(--shadow) / 12%);
+  animation: bubble-rise var(--bubble-duration) ease-in-out var(--bubble-delay) infinite alternate;
+}
+
+.bubble-one {
+  --bubble-size: 12px;
+  --bubble-color: rgb(168 205 240 / 48%);
+  --bubble-duration: 8s;
+  --bubble-delay: -3s;
+  top: 11%;
+  left: 22%;
+}
+
+.bubble-two {
+  --bubble-size: 18px;
+  --bubble-color: rgb(203 239 230 / 60%);
+  --bubble-duration: 10s;
+  --bubble-delay: -6s;
+  top: 17%;
+  right: 19%;
+}
+
+.bubble-three {
+  --bubble-size: 8px;
+  --bubble-color: rgb(168 205 240 / 56%);
+  --bubble-duration: 9s;
+  --bubble-delay: -2s;
+  top: 36%;
+  right: 12%;
+}
+
+.bubble-four {
+  --bubble-size: 15px;
+  --bubble-color: rgb(203 239 230 / 62%);
+  --bubble-duration: 11s;
+  --bubble-delay: -8s;
+  top: 47%;
+  left: 13%;
+}
+
+.bubble-five {
+  --bubble-size: 6px;
+  --bubble-color: rgb(168 205 240 / 64%);
+  --bubble-duration: 7s;
+  --bubble-delay: -4s;
+  top: 66%;
+  right: 21%;
+}
+
+.bubble-six {
+  --bubble-size: 17px;
+  --bubble-color: rgb(203 239 230 / 56%);
+  --bubble-duration: 12s;
+  --bubble-delay: -7s;
+  top: 76%;
+  left: 19%;
+}
+
+.bubble-seven {
+  --bubble-size: 10px;
+  --bubble-color: rgb(168 205 240 / 52%);
+  --bubble-duration: 9s;
+  --bubble-delay: -5s;
+  top: 88%;
+  right: 15%;
+}
+
+.bubble-eight {
+  --bubble-size: 7px;
+  --bubble-color: rgb(203 239 230 / 66%);
+  --bubble-duration: 8s;
+  --bubble-delay: -1s;
+  top: 29%;
+  left: 15%;
+}
+
+@keyframes bubble-rise {
+  from {
+    translate: 0 12px;
+  }
+  to {
+    translate: 0 -14px;
+  }
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 40px, 760px);
+  margin-inline: auto;
+  padding: 68px 0 32px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  align-items: center;
+  gap: clamp(24px, 6vw, 64px);
+  min-height: 270px;
+  margin-bottom: 32px;
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--text-soft);
+  font-family: "Jua", sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+h1,
+h2 {
+  font-family: "Jua", sans-serif;
+  font-weight: 400;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3rem, 10vw, 4.5rem);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.school {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  font-size: 0.97rem;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+
+.slogan {
+  margin: 18px 0 0;
+  color: var(--accent-strong);
+  font-family: "Gaegu", cursive;
+  font-size: clamp(1.45rem, 4vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.avatar-ring {
+  position: relative;
+  display: grid;
+  width: 184px;
+  aspect-ratio: 1;
+  place-items: center;
+  justify-self: end;
+  overflow: hidden;
+  border: 8px solid transparent;
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(145deg, #D9EEFF 5%, var(--accent) 48%, #EAF7FF 74%, #B8D8F5) border-box;
+  box-shadow:
+    inset 0 4px 12px rgb(255 255 255 / 95%),
+    0 12px 32px rgb(var(--shadow) / 20%);
+}
+
+.avatar-ring::before {
+  position: absolute;
+  top: 12px;
+  left: 31px;
+  width: 62px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 72%);
+  content: "";
+  filter: blur(7px);
+  transform: rotate(-28deg);
+}
+
+.cat-avatar {
+  display: block;
+  width: 92%;
+  height: 92%;
+}
+
+.card {
+  border: 1.5px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 8px 26px rgb(var(--shadow) / 10%);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.about-card {
+  position: relative;
+  margin-bottom: 48px;
+  padding: 38px 32px 30px;
+}
+
+.about-card p {
+  margin: 0;
+  color: var(--text);
+  line-height: 2;
+  word-break: keep-all;
+}
+
+.ice-badge {
+  position: absolute;
+  top: -18px;
+  left: 24px;
+  display: grid;
+  width: 42px;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--soft);
+  font-size: 1.2rem;
+}
+
+.content-section {
+  margin-top: 44px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 0 20px;
+  font-size: 1.65rem;
+  line-height: 1.4;
+}
+
+.section-title::before {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: "";
+}
+
+.skills-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: skill;
+}
+
+.skill-card {
+  display: flex;
+  min-width: 0;
+  min-height: 112px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 19px 21px;
+}
+
+.skill-number {
+  color: var(--accent-strong);
+  font-family: "Jua", sans-serif;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.skill-card h3 {
+  margin: 13px 0 0;
+  font-family: "Gaegu", cursive;
+  font-size: clamp(1.35rem, 3vw, 1.65rem);
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.favorite-games-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.favorite-game-card {
+  display: grid;
+  min-width: 0;
+  min-height: 88px;
+  place-items: center;
+  padding: 16px;
+  font-family: "Gaegu", cursive;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.activity-list {
+  display: grid;
+  gap: 14px;
+}
+
+.activity-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 21px 23px;
+}
+
+.activity-icon {
+  display: grid;
+  width: 36px;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--soft);
+  font-size: 1.1rem;
+}
+
+.activity-card h3 {
+  margin: 0;
+  font-family: "Gaegu", cursive;
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.activity-card p {
+  margin: 5px 0 0;
+  color: var(--text-soft);
+  line-height: 1.75;
+  word-break: keep-all;
+}
+
+.contact-card {
+  margin-top: 44px;
+  padding: 26px;
+  text-align: center;
+}
+
+.contact-card .section-title {
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.contact-card > p {
+  margin: 0 0 19px;
+  color: var(--text-soft);
+  word-break: keep-all;
+}
+
+.email-button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 10px 21px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #203E59;
+  font-family: "Jua", sans-serif;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.email-button:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 4px;
+}
+
+.ideas-section {
+  margin-top: 48px;
+}
+
+.ideas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.idea-card {
+  min-width: 0;
+  padding: 22px;
+}
+
+.idea-card h3 {
+  margin: 0;
+  color: var(--text);
+  font-family: "Gaegu", cursive;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.idea-description {
+  margin: 8px 0 18px;
+  color: var(--text-soft);
+  line-height: 1.7;
+  word-break: keep-all;
+}
+
+.idea-details {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+}
+
+.idea-details div {
+  min-width: 0;
+}
+
+.idea-details dt {
+  margin-bottom: 3px;
+  color: var(--accent-strong);
+  font-family: "Jua", sans-serif;
+  font-size: 0.96rem;
+}
+
+.idea-details dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.75;
+  word-break: keep-all;
+}
+
+.page-footer {
+  margin-top: 48px;
+  padding: 20px 0 8px;
+  border-top: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: 0.87rem;
+  text-align: center;
+}
+
+.page-footer p {
+  margin: 0;
+}
+
+.page-footer p + p {
+  margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding-top: 42px;
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr) 116px;
+    gap: 12px;
+    min-height: 220px;
+  }
+
+  .avatar-ring {
+    width: 112px;
+    border-width: 6px;
+  }
+
+  .hero-copy {
+    overflow-wrap: anywhere;
+  }
+
+  .school {
+    font-size: 0.9rem;
+  }
+
+  .about-card {
+    padding: 36px 22px 24px;
+  }
+
+  .about-card p {
+    line-height: 1.85;
+  }
+
+  .skill-card {
+    min-height: 106px;
+    padding: 16px;
+  }
+
+  .activity-card {
+    padding: 18px;
+  }
+
+  .ideas-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 400px) {
+  .page {
+    width: calc(100% - 32px);
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr) 92px;
+    gap: 8px;
+  }
+
+  .avatar-ring {
+    width: 90px;
+    border-width: 5px;
+  }
+
+  .eyebrow {
+    font-size: 0.88rem;
+  }
+
+  h1 {
+    font-size: 2.75rem;
+  }
+
+  .school {
+    font-size: 0.82rem;
+  }
+
+  .slogan {
+    font-size: 1.3rem;
+  }
+
+  .skills-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .favorite-games-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contact-card {
+    padding: 23px 16px;
+  }
+
+  .email-button {
+    font-size: 0.95rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
