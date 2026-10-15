@@ -6,7 +6,7 @@ const screen = {
   width: canvas.width,
   height: canvas.height,
   playerX: 400,
-  playerY: 438,
+  playerY: 385,
 };
 
 const colors = {
