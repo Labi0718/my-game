@@ -9,11 +9,7 @@ const scene = {
   height: canvas.height, // 캔버스의 세로 픽셀 수
   hills: { farY: 370, nearY: 440 }, // 먼 언덕과 가까운 언덕의 시작 높이
   sun: { x: 680, y: 115, radius: 43 }, // 태양의 중심 좌표와 반지름
-  // 구름의 중심 좌표와 크기 배율
-  clouds: [
-    { x: 150, y: 112, scale: 0.9 },
-    { x: 455, y: 155, scale: 0.72 },
-  ],
+  cumulonimbus: { baseY: 365 }, // 적란운 덩어리가 하늘 아래쪽에 닿는 높이
   stars: [], // 별의 좌표를 넣으면 하늘에 별을 그린다.
   itemSize: 20, // 떨어지는 모든 아이템의 기준 크기
   // type은 아이콘 종류, x와 y는 중심 좌표, collectible은 수집 가능 여부
@@ -22,8 +18,6 @@ const scene = {
     { type: "sunflower", x: 346, y: 205, collectible: true },
     { type: "sunflower", x: 548, y: 270, collectible: true },
     { type: "sunflower", x: 694, y: 220, collectible: true },
-    { type: "snowflake", x: 76, y: 324, collectible: false },
-    { type: "snowman", x: 226, y: 336, collectible: false },
     { type: "glove", x: 295, y: 268, collectible: false },
     { type: "swan", x: 450, y: 325, collectible: false },
     { type: "moon", x: 622, y: 352, collectible: false },
@@ -32,14 +26,14 @@ const scene = {
     { type: "star", x: 266, y: 408, collectible: false },
     { type: "bat", x: 520, y: 397, collectible: false },
     { type: "walnut", x: 662, y: 432, collectible: false },
-    { type: "snowflake", x: 384, y: 311, collectible: false },
   ],
   conductor: { x: 400, y: 408, scale: 0.55 }, // 지휘자의 중심 위치와 크기 배율
   // 각 UI 칸의 위치와 너비·높이
   hud: {
     song: { x: 24, y: 22, width: 245, height: 48 },
     stage: { x: 310, y: 20, width: 180, height: 34 },
-    target: { x: 24, y: 84, width: 90, height: 82 },
+    target: { x: 24, y: 245, width: 90, height: 82 },
+    lives: { x: 615, y: 20, width: 160, height: 42, count: 3 },
   },
   // 지휘자 아래 게이지의 위치, 크기, 채워진 퍼센트
   gauge: {
@@ -65,7 +59,7 @@ const colors = {
   bad: "#ffd1c9", // 목표가 아닌 아이템 안내 색
 };
 
-// 푸른 여름 하늘, 햇살, 흰 구름을 그린다.
+// 적란운이 넓게 발달한 하늘 배경과 햇빛을 그린다.
 function drawSky() {
   // 위쪽에서 아래쪽으로 변하는 하늘색 그라데이션을 만든다.
   const sky = ctx.createLinearGradient(0, 0, 0, scene.height);
@@ -108,31 +102,60 @@ function drawSky() {
   // 저장했던 기본 그리기 설정으로 되돌린다.
   ctx.restore();
 
-  // 설정 목록에 있는 구름을 하나씩 그린다.
-  scene.clouds.forEach(drawCloud);
+  // 하늘 전체를 차지하는 크고 층진 적란운 덩어리를 그린다.
+  drawCumulonimbusSky();
 }
 
-// 둥근 구름 하나를 지정한 좌표와 크기로 그린다.
-function drawCloud({ x, y, scale }) {
-  // 구름을 그리기 전의 크기와 좌표 설정을 저장한다.
+// 화면 폭을 가로지르며 높이 솟은 적란운 하늘 배경을 그린다.
+function drawCumulonimbusSky() {
+  // 구름 배경을 그리기 전의 Canvas 설정을 저장한다.
   ctx.save();
-  // 구름을 그릴 중심 위치로 좌표 원점을 옮긴다.
-  ctx.translate(x, y);
-  // 구름 크기를 설정된 배율로 조정한다.
-  ctx.scale(scale, scale);
-  // 구름을 흰색으로 칠하도록 정한다.
-  ctx.fillStyle = "rgb(255 255 255 / 90%)";
-  // 세 개의 원을 이어 둥근 구름 모양을 시작한다.
+  // 화면 아래를 가로지르고 여러 봉우리가 솟는 적란운 외곽선을 만든다.
   ctx.beginPath();
-  // 구름 왼쪽의 둥근 부분
-  ctx.arc(-24, 5, 17, 0, Math.PI * 2);
-  // 구름 가운데의 큰 둥근 부분
-  ctx.arc(-5, -5, 23, 0, Math.PI * 2);
-  // 구름 오른쪽의 둥근 부분
-  ctx.arc(19, 5, 17, 0, Math.PI * 2);
-  // 이어진 원들을 흰색 구름으로 칠한다.
+  ctx.moveTo(0, scene.cumulonimbus.baseY - 28);
+  ctx.quadraticCurveTo(27, 278, 66, 261);
+  ctx.quadraticCurveTo(34, 228, 77, 205);
+  ctx.quadraticCurveTo(55, 166, 105, 151);
+  ctx.quadraticCurveTo(120, 111, 160, 127);
+  ctx.quadraticCurveTo(198, 81, 232, 112);
+  ctx.quadraticCurveTo(269, 91, 297, 137);
+  ctx.quadraticCurveTo(335, 139, 347, 179);
+  ctx.quadraticCurveTo(374, 156, 389, 116);
+  ctx.quadraticCurveTo(374, 72, 423, 52);
+  ctx.quadraticCurveTo(458, 23, 493, 67);
+  ctx.quadraticCurveTo(541, 39, 568, 88);
+  ctx.quadraticCurveTo(602, 92, 613, 137);
+  ctx.quadraticCurveTo(650, 124, 675, 166);
+  ctx.quadraticCurveTo(725, 161, 741, 207);
+  ctx.quadraticCurveTo(783, 216, scene.width, 269);
+  ctx.lineTo(scene.width, scene.cumulonimbus.baseY);
+  ctx.lineTo(0, scene.cumulonimbus.baseY);
+  ctx.closePath();
+
+  // 위쪽은 밝고 아래쪽은 푸른 회색인 구름 빛을 만든다.
+  const cloudLight = ctx.createLinearGradient(0, 50, 0, scene.cumulonimbus.baseY);
+  cloudLight.addColorStop(0, "#ffffff");
+  cloudLight.addColorStop(0.48, "#eaf7ff");
+  cloudLight.addColorStop(1, "#91b8d2");
+  ctx.fillStyle = cloudLight;
+  // 적란운 전체를 밝은 구름빛으로 채운다.
   ctx.fill();
-  // 다음 그림을 위해 원래 좌표와 크기 설정으로 되돌린다.
+
+  // 구름의 아래쪽을 잘라 음영이 윗부분을 덮지 않도록 한다.
+  ctx.clip();
+  const cloudShadow = ctx.createLinearGradient(0, 205, 0, scene.cumulonimbus.baseY);
+  cloudShadow.addColorStop(0, "rgb(97 143 177 / 0%)");
+  cloudShadow.addColorStop(1, "rgb(65 105 142 / 62%)");
+  ctx.fillStyle = cloudShadow;
+  // 적란운 밑면에 깊이감 있는 푸른 회색 그림자를 더한다.
+  ctx.fillRect(0, 205, scene.width, scene.cumulonimbus.baseY - 205);
+
+  // 구름 덩어리 아래쪽에 길게 이어지는 음영 층을 그린다.
+  ctx.fillStyle = "rgb(77 121 157 / 28%)";
+  ctx.beginPath();
+  ctx.ellipse(410, scene.cumulonimbus.baseY - 7, 470, 43, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 저장했던 기본 Canvas 설정으로 되돌린다.
   ctx.restore();
 }
 
@@ -635,10 +658,10 @@ function drawConductor() {
   ctx.restore();
 }
 
-// 곡 제목과 해바라기 수집 안내를 화면 왼쪽 위에 표시한다.
+// 곡 정보와 스테이지 번호, 남은 라이프를 화면 위쪽에 표시한다.
 function drawHud() {
-  // 좌측 위 곡 정보와 상단 가운데 스테이지 칸의 위치를 꺼낸다.
-  const { song, stage } = scene.hud;
+  // 상단 UI 칸들의 좌표와 크기를 설정에서 꺼낸다.
+  const { song, stage, lives } = scene.hud;
 
   // 스테이지 표시 칸의 배경색과 둥근 모서리를 정한다.
   ctx.fillStyle = colors.panel;
@@ -673,6 +696,28 @@ function drawHud() {
   // 음표 옆에 작곡가 이름과 현재 곡 제목을 쓴다.
   ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText("비발디 - 사계 중 여름", song.x + 43, song.y + 29);
+
+  // 오른쪽 위에 라이프를 표시하는 배경 칸을 그린다.
+  ctx.fillStyle = colors.panel;
+  ctx.beginPath();
+  ctx.roundRect(lives.x, lives.y, lives.width, lives.height, 8);
+  ctx.fill();
+  // 남은 라이프 개수만큼 하트를 일정한 간격으로 그린다.
+  for (let heart = 0; heart < lives.count; heart += 1) {
+    drawHeart(lives.x + 34 + heart * 43, lives.y + 21, 15);
+  }
+}
+
+// 지정한 중심 좌표에 라이프를 나타내는 하트 하나를 그린다.
+function drawHeart(x, y, size) {
+  ctx.fillStyle = "#ff7185";
+  ctx.beginPath();
+  ctx.moveTo(x, y + size * 0.42);
+  ctx.bezierCurveTo(x - size * 0.18, y + size * 0.22, x - size, y - size * 0.3, x - size * 0.72, y - size * 0.72);
+  ctx.bezierCurveTo(x - size * 0.48, y - size * 1.08, x - size * 0.08, y - size * 0.88, x, y - size * 0.54);
+  ctx.bezierCurveTo(x + size * 0.08, y - size * 0.88, x + size * 0.48, y - size * 1.08, x + size * 0.72, y - size * 0.72);
+  ctx.bezierCurveTo(x + size, y - size * 0.3, x + size * 0.18, y + size * 0.22, x, y + size * 0.42);
+  ctx.fill();
 }
 
 // 지휘자 발밑에 진행률 게이지와 현재 퍼센트를 표시한다.
@@ -718,7 +763,7 @@ function drawGauge() {
 
 // 목표 아이템이라는 제목 아래에 수집할 해바라기 표시만 둔다.
 function drawLegend() {
-  // 목표 아이템 안내 칸의 위치와 크기를 설정에서 꺼낸다.
+  // 화면 왼쪽 중간에 놓일 목표 아이템 안내 칸의 위치와 크기를 꺼낸다.
   const { x, y, width, height } = scene.hud.target;
   // 목표 아이템 안내 배경을 둥근 사각형으로 그린다.
   ctx.fillStyle = colors.panel;
@@ -747,7 +792,7 @@ function drawFirstScreen() {
   scene.items.forEach(drawItem);
   // 아이템 앞쪽에 지휘자를 그린다.
   drawConductor();
-  // 곡 제목과 스테이지 이름을 그린다.
+  // 곡 제목, 스테이지 이름과 남은 라이프를 그린다.
   drawHud();
   // 왼쪽 위에 목표 아이템 안내를 그린다.
   drawLegend();
