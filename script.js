@@ -9,6 +9,7 @@ const scene = {
   height: canvas.height, // 캔버스의 세로 픽셀 수
   hills: { farY: 370, nearY: 440 }, // 먼 언덕과 가까운 언덕의 시작 높이
   sun: { x: 680, y: 115, radius: 43 }, // 태양의 중심 좌표와 반지름
+  clouds: [], // 크기와 위치, 속도가 제각각인 이동 구름
   cumulonimbus: { baseY: 365 }, // 적란운 덩어리가 하늘 아래쪽에 닿는 높이
   stars: [], // 별의 좌표를 넣으면 하늘에 별을 그린다.
   itemSize: 20, // 떨어지는 모든 아이템의 기준 크기
@@ -48,6 +49,25 @@ const colors = {
   good: "#ddff9e", // 목표 아이템 안내 색
   bad: "#ffd1c9", // 목표가 아닌 아이템 안내 색
 };
+
+// 태양 반지름을 기준으로 작은 구름과 큰 구름을 무작위로 만든다.
+function createDriftingCloud(x = Math.random() * scene.width) {
+  const sizeType = Math.floor(Math.random() * 3);
+  const sizeMultiplier = [
+    0.4 + Math.random() * 0.15,
+    0.65,
+    0.8 + Math.random() * 0.15,
+  ][sizeType];
+
+  return {
+    x,
+    y: 40 + Math.random() * 235,
+    radius: scene.sun.radius * sizeMultiplier,
+    speed: 0.35 + Math.random() * 0.45,
+  };
+}
+
+scene.clouds = Array.from({ length: 5 }, () => createDriftingCloud());
 
 const itemTypes = [
   "sunflower",
@@ -159,19 +179,35 @@ function drawSky() {
     ctx.fill();
   });
 
-  // 화면 오른쪽 위에 여름 햇살을 그린다.
+  // 화면 오른쪽 위에서 숨 쉬듯 빛나는 여름 햇살을 그린다.
+  const sunPulse = 1 + Math.sin(performance.now() / 450) * 0.07;
+  const rayInner = scene.sun.radius + 7;
+  const rayOuter = scene.sun.radius + 13 + sunPulse * 5;
   // 현재 그리기 설정을 저장해 그림자 효과가 다른 그림에 번지지 않게 한다.
   ctx.save();
+  ctx.translate(scene.sun.x, scene.sun.y);
+  ctx.rotate(performance.now() / 9000);
+  ctx.strokeStyle = "rgb(255 209 102 / 72%)";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  for (let ray = 0; ray < 12; ray += 1) {
+    const angle = (Math.PI * 2 * ray) / 12;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(angle) * rayInner, Math.sin(angle) * rayInner);
+    ctx.lineTo(Math.cos(angle) * rayOuter, Math.sin(angle) * rayOuter);
+    ctx.stroke();
+  }
+  ctx.translate(-scene.sun.x, -scene.sun.y);
   // 태양 주위에 번지는 빛의 색을 지정한다.
   ctx.shadowColor = "rgb(255 209 102 / 70%)";
   // 빛 번짐의 크기를 지정한다.
-  ctx.shadowBlur = 30;
+  ctx.shadowBlur = 24 + sunPulse * 18;
   // 태양을 칠할 색을 지정한다.
   ctx.fillStyle = colors.sun;
   // 태양 원을 그릴 경로를 시작한다.
   ctx.beginPath();
   // 설정한 중심 좌표와 반지름으로 태양 원을 만든다.
-  ctx.arc(scene.sun.x, scene.sun.y, scene.sun.radius, 0, Math.PI * 2);
+  ctx.arc(scene.sun.x, scene.sun.y, scene.sun.radius * sunPulse, 0, Math.PI * 2);
   // 태양 원을 색칠한다.
   ctx.fill();
   // 저장했던 기본 그리기 설정으로 되돌린다.
@@ -179,6 +215,38 @@ function drawSky() {
 
   // 하늘 전체를 차지하는 크고 층진 적란운 덩어리를 그린다.
   drawCumulonimbusSky();
+  drawDriftingClouds();
+}
+
+// 작은 구름들이 서로 다른 속도로 하늘을 지나가게 한다.
+function drawDriftingClouds() {
+  scene.clouds.forEach(({ x, y, radius }) => {
+    ctx.save();
+    ctx.fillStyle = "rgb(153 198 221 / 32%)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + radius * 0.18, radius * 1.45, radius * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgb(222 242 252 / 48%)";
+    ctx.beginPath();
+    ctx.ellipse(x - radius * 0.8, y + radius * 0.12, radius * 0.72, radius * 0.48, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - radius * 0.2, y - radius * 0.12, radius * 0.82, radius * 0.72, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + radius * 0.58, y - radius * 0.02, radius * 0.78, radius * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function updateClouds() {
+  scene.clouds.forEach((cloud) => {
+    cloud.x += cloud.speed;
+    if (cloud.x > scene.width + cloud.radius * 2.4) {
+      Object.assign(
+        cloud,
+        createDriftingCloud(-cloud.radius * 2.4 - Math.random() * 180),
+      );
+    }
+  });
 }
 
 // 화면 폭을 가로지르며 높이 솟은 적란운 하늘 배경을 그린다.
@@ -997,6 +1065,7 @@ function drawStartNotice() {
 function gameLoop() {
   // 이전 프레임의 그림을 지운다.
   ctx.clearRect(0, 0, scene.width, scene.height);
+  updateClouds();
 
   if (!scene.gameOver) {
     // 지휘자를 움직이고, 준비 시간이 지난 뒤 아이템을 떨어뜨린다.
