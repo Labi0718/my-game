@@ -12,22 +12,11 @@ const scene = {
   cumulonimbus: { baseY: 365 }, // 적란운 덩어리가 하늘 아래쪽에 닿는 높이
   stars: [], // 별의 좌표를 넣으면 하늘에 별을 그린다.
   itemSize: 20, // 떨어지는 모든 아이템의 기준 크기
-  // type은 아이콘 종류, x와 y는 중심 좌표, collectible은 수집 가능 여부
-  items: [
-    { type: "sunflower", x: 132, y: 239, collectible: true },
-    { type: "sunflower", x: 346, y: 205, collectible: true },
-    { type: "sunflower", x: 548, y: 270, collectible: true },
-    { type: "sunflower", x: 694, y: 220, collectible: true },
-    { type: "glove", x: 295, y: 268, collectible: false },
-    { type: "swan", x: 450, y: 325, collectible: false },
-    { type: "moon", x: 622, y: 352, collectible: false },
-    { type: "redYarn", x: 748, y: 310, collectible: false },
-    { type: "leaf", x: 95, y: 417, collectible: false },
-    { type: "star", x: 266, y: 408, collectible: false },
-    { type: "bat", x: 520, y: 397, collectible: false },
-    { type: "walnut", x: 662, y: 432, collectible: false },
-  ],
-  conductor: { x: 400, y: 408, scale: 0.55 }, // 지휘자의 중심 위치와 크기 배율
+  items: [], // 각각 위치와 속도가 다른 낙하 아이템
+  conductor: { x: 400, y: 408, scale: 0.55, speed: 5 }, // 지휘자의 위치, 크기, 좌우 이동 속도
+  keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
+  gameOver: false, // 라이프를 모두 잃으면 게임을 멈춘다.
+  itemsStartAt: performance.now() + 2000, // 시작 후 아이템이 떨어지기 전까지 기다릴 시각
   // 각 UI 칸의 위치와 너비·높이
   hud: {
     song: { x: 24, y: 22, width: 245, height: 48 },
@@ -43,6 +32,7 @@ const scene = {
     height: 12,
     panelPadding: 9,
     percent: 0,
+    gainPerItem: 5,
   },
 };
 
@@ -58,6 +48,91 @@ const colors = {
   good: "#ddff9e", // 목표 아이템 안내 색
   bad: "#ffd1c9", // 목표가 아닌 아이템 안내 색
 };
+
+const itemTypes = [
+  "sunflower",
+  "sunflower",
+  "sunflower",
+  "sunflower",
+  "snowflake",
+  "snowman",
+  "glove",
+  "swan",
+  "moon",
+  "redYarn",
+  "leaf",
+  "star",
+  "bat",
+  "walnut",
+];
+const itemSpeedLevels = [
+  { name: "느리게", min: 1, max: 1.4 },
+  { name: "중간", min: 1.4, max: 1.9 },
+  { name: "빠르게", min: 2.4, max: 3.2 },
+];
+
+window.addEventListener("keydown", (event) => {
+  if (scene.gameOver) return;
+  if (event.key === "ArrowLeft") {
+    scene.keys.left = true;
+    event.preventDefault();
+  }
+  if (event.key === "ArrowRight") {
+    scene.keys.right = true;
+    event.preventDefault();
+  }
+});
+
+window.addEventListener("keyup", (event) => {
+  if (event.key === "ArrowLeft") scene.keys.left = false;
+  if (event.key === "ArrowRight") scene.keys.right = false;
+});
+
+window.addEventListener("click", (event) => {
+  if (!scene.gameOver) return;
+
+  const bounds = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const clickX = (event.clientX - bounds.left) * scaleX;
+  const clickY = (event.clientY - bounds.top) * scaleY;
+  const button = getRestartButtonBounds();
+
+  if (
+    clickX >= button.x &&
+    clickX <= button.x + button.width &&
+    clickY >= button.y &&
+    clickY <= button.y + button.height
+  ) {
+    resetGame();
+  }
+});
+
+window.addEventListener("blur", () => {
+  scene.keys.left = false;
+  scene.keys.right = false;
+});
+
+// 아이템 하나의 종류, 위치, 낙하 속도를 각각 무작위로 정한다.
+function createRandomItem(y = Math.random() * scene.height) {
+  const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+  const speedLevel = itemSpeedLevels[Math.floor(Math.random() * itemSpeedLevels.length)];
+  const margin = scene.itemSize * 2;
+
+  return {
+    type,
+    x: margin + Math.random() * (scene.width - margin * 2),
+    y,
+    speed: speedLevel.min + Math.random() * (speedLevel.max - speedLevel.min),
+    speedLevel: speedLevel.name,
+    collectible: type === "sunflower",
+  };
+}
+
+// 아이템은 화면 위쪽에 대기하고, 준비 시간이 지나면 떨어지기 시작한다.
+scene.items = Array.from({ length: 12 }, () =>
+  createRandomItem(-Math.random() * (scene.height + scene.itemSize * 2)),
+);
 
 // 적란운이 넓게 발달한 하늘 배경과 햇빛을 그린다.
 function drawSky() {
@@ -798,7 +873,143 @@ function drawFirstScreen() {
   drawLegend();
   // 지휘자 바로 아래에 현재 게이지를 그린다.
   drawGauge();
+  if (scene.gameOver) drawGameOver();
+  else if (performance.now() < scene.itemsStartAt) drawStartNotice();
 }
 
-// 첫 화면을 한 번 그려 브라우저에 보여 준다.
-drawFirstScreen();
+// 지휘자를 방향키로 움직이고, 캔버스 가장자리 안에 머물게 한다.
+function updateConductor() {
+  if (scene.keys.left) scene.conductor.x -= scene.conductor.speed;
+  if (scene.keys.right) scene.conductor.x += scene.conductor.speed;
+
+  const halfWidth = 85 * scene.conductor.scale;
+  scene.conductor.x = Math.max(
+    halfWidth,
+    Math.min(scene.width - halfWidth, scene.conductor.x),
+  );
+}
+
+// 사용한 아이템을 새 무작위 아이템으로 바꾸어 화면 위쪽에서 다시 떨어뜨린다.
+function resetItem(item) {
+  Object.assign(
+    item,
+    createRandomItem(-Math.random() * scene.height - scene.itemSize * 2),
+  );
+}
+
+// 게임 오버 뒤 다시 시작할 수 있도록 플레이 상태와 아이템을 초기화한다.
+function resetGame() {
+  scene.gameOver = false;
+  scene.hud.lives.count = 3;
+  scene.gauge.percent = 0;
+  scene.conductor.x = scene.width / 2;
+  scene.itemsStartAt = performance.now() + 2000;
+  scene.keys.left = false;
+  scene.keys.right = false;
+  scene.items.forEach((item) => {
+    Object.assign(
+      item,
+      createRandomItem(-Math.random() * (scene.height + scene.itemSize * 2)),
+    );
+  });
+}
+
+// 아이템마다 따로 떨어뜨리고, 잔디에 닿거나 지휘자와 부딪히면 처리한다.
+function updateItems() {
+  scene.items.forEach((item) => {
+    item.y += item.speed;
+
+    const itemRadius = scene.itemSize * 1.5;
+    const grassFloor = scene.conductor.y + 131 * scene.conductor.scale;
+    if (item.y + itemRadius >= grassFloor) {
+      resetItem(item);
+      return;
+    }
+
+    const conductor = scene.conductor;
+    const conductorHalfWidth = 45 * conductor.scale;
+    const conductorTop = conductor.y - 34 * conductor.scale;
+    const conductorBottom = conductor.y + 131 * conductor.scale;
+    const touchesConductor =
+      item.x + itemRadius >= conductor.x - conductorHalfWidth &&
+      item.x - itemRadius <= conductor.x + conductorHalfWidth &&
+      item.y + itemRadius >= conductorTop &&
+      item.y - itemRadius <= conductorBottom;
+
+    if (touchesConductor) {
+      if (item.collectible) {
+        scene.gauge.percent = Math.min(
+          100,
+          scene.gauge.percent + scene.gauge.gainPerItem,
+        );
+      } else {
+        scene.hud.lives.count = Math.max(0, scene.hud.lives.count - 1);
+        scene.gameOver = scene.hud.lives.count === 0;
+      }
+      resetItem(item);
+      return;
+    }
+
+    if (item.y > scene.height + itemRadius) {
+      resetItem(item);
+    }
+  });
+}
+
+// 라이프를 모두 잃었을 때 화면 중앙에 종료 안내를 보여 준다.
+function drawGameOver() {
+  ctx.fillStyle = "rgb(14 32 48 / 72%)";
+  ctx.fillRect(0, 0, scene.width, scene.height);
+  ctx.fillStyle = colors.text;
+  ctx.textAlign = "center";
+  ctx.font = "bold 38px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("게임 오버", scene.width / 2, scene.height / 2);
+  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("방해 아이템에 세 번 닿았습니다.", scene.width / 2, scene.height / 2 + 38);
+  const button = getRestartButtonBounds();
+  ctx.fillStyle = "#ffd447";
+  ctx.beginPath();
+  ctx.roundRect(button.x, button.y, button.width, button.height, 10);
+  ctx.fill();
+  ctx.fillStyle = "#26364a";
+  ctx.font = "bold 18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("다시하기", button.x + button.width / 2, button.y + 33);
+  ctx.textAlign = "start";
+}
+
+function getRestartButtonBounds() {
+  return { x: scene.width / 2 - 90, y: scene.height / 2 + 58, width: 180, height: 52 };
+}
+
+function drawStartNotice() {
+  ctx.fillStyle = colors.panel;
+  ctx.beginPath();
+  ctx.roundRect(scene.width / 2 - 135, 93, 270, 34, 8);
+  ctx.fill();
+  ctx.fillStyle = colors.text;
+  ctx.textAlign = "center";
+  ctx.font = "bold 15px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("아이템이 잠시 후 떨어집니다", scene.width / 2, 116);
+  ctx.textAlign = "start";
+}
+
+// 화면 지우기 → 위치 계산 → 다시 그리기를 반복한다.
+function gameLoop() {
+  // 이전 프레임의 그림을 지운다.
+  ctx.clearRect(0, 0, scene.width, scene.height);
+
+  if (!scene.gameOver) {
+    // 지휘자를 움직이고, 준비 시간이 지난 뒤 아이템을 떨어뜨린다.
+    updateConductor();
+    if (performance.now() >= scene.itemsStartAt) updateItems();
+  }
+
+  // 바뀐 위치를 포함해 현재 게임 화면을 그린다.
+  drawFirstScreen();
+
+  // 브라우저에 다음 프레임을 예약한다.
+  requestAnimationFrame(gameLoop);
+}
+
+// 게임 루프를 처음 실행한다.
+gameLoop();
