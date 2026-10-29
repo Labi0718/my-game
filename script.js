@@ -21,6 +21,7 @@ const scene = {
   screen: "home", // 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
   volume: 70, // 사운드 슬라이더 값
   stage: 1, // 현재 진행 중인 스테이지
+  retryStage: 1, // 실패 후 다시 시작할 스테이지
   meeting: false, // 게이지를 채우고 무지카를 만나는 화면인지 나타낸다.
   gameOver: false, // 라이프를 모두 잃으면 게임을 멈춘다.
   itemsStartAt: performance.now() + 2000, // 시작 후 아이템이 떨어지기 전까지 기다릴 시각
@@ -91,10 +92,12 @@ const itemTypes = [
   "swan",
   "moon",
   "redYarn",
+  "flower",
   "leaf",
   "star",
   "bat",
   "walnut",
+  "crown",
 ];
 const itemSpeedLevels = [
   { name: "느리게", min: 1, max: 1.4 },
@@ -102,8 +105,10 @@ const itemSpeedLevels = [
   { name: "빠르게", min: 2.4, max: 3.2 },
 ];
 const allDecoyTypes = [...new Set(itemTypes)].filter(
-  (type) => type !== "sunflower",
+  (type) => type !== "sunflower" && type !== "crown",
 );
+const itemLaneCount = 14;
+const activeItemLanes = [0, 2, 4, 6, 8, 10, 12];
 
 const stages = {
   1: {
@@ -156,6 +161,60 @@ const stages = {
       { name: "빠르게", min: 4.2, max: 5 },
     ],
   },
+  4: {
+    song: "엘가 - 위풍당당 행진곡",
+    title: "위풍당당",
+    target: "crown",
+    targetChance: 1 / 14,
+    decoyTypes: allDecoyTypes,
+    dialogue: [
+      "흥, 내가 올 줄 알았지?",
+      "엘가의 위풍당당 행진곡이야.",
+      "이 무대에 어울리는 건 나뿐이지!",
+      "자, 내 뒤를 따라오라고!",
+    ],
+    speeds: [
+      { name: "느리게", min: 2.8, max: 3.4 },
+      { name: "중간", min: 3.8, max: 4.5 },
+      { name: "빠르게", min: 5, max: 6 },
+    ],
+  },
+  5: {
+    song: "베토벤 - 교향곡 5번 운명",
+    title: "운명",
+    target: "redYarn",
+    targetChance: 1 / 18,
+    decoyTypes: allDecoyTypes.filter((type) => type !== "redYarn"),
+    dialogue: [
+      "마침내 만났네, 나의 운명.",
+      "베토벤 교향곡 5번, 운명이야.",
+      "이 붉은 실이 우리를 이어 줬어.",
+      "어떤 길을 가도, 난 널 찾아낼 거야.",
+    ],
+    speeds: [
+      { name: "느리게", min: 3.4, max: 4 },
+      { name: "중간", min: 4.5, max: 5.3 },
+      { name: "빠르게", min: 6, max: 7 },
+    ],
+  },
+  6: {
+    song: "쇼팽 - 환상 즉흥곡",
+    title: "환상 즉흥곡",
+    target: "flower",
+    targetChance: 1 / 10,
+    decoyTypes: allDecoyTypes.filter((type) => type !== "flower"),
+    dialogue: [
+      "꽃향기를 따라 여기까지 왔구나!",
+      "나는 쇼팽의 환상 즉흥곡이야.",
+      "햇살 아래 피어난 꽃처럼 반짝이지?",
+      "이 꽃밭에서 함께 춤춰 보자!",
+    ],
+    speeds: [
+      { name: "느리게", min: 3.4, max: 4 },
+      { name: "중간", min: 4.5, max: 5.3 },
+      { name: "빠르게", min: 6, max: 7 },
+    ],
+  },
 };
 
 window.addEventListener("keydown", (event) => {
@@ -192,7 +251,7 @@ window.addEventListener("click", (event) => {
   }
   if (scene.screen === "levels") {
     for (let stage = 1; stage <= 10; stage += 1) {
-      if (stage <= 3 && isInsideButton(x, y, getLevelCardBounds(stage))) {
+      if (stage <= 6 && isInsideButton(x, y, getLevelCardBounds(stage))) {
         startStage(stage);
         return;
       }
@@ -221,8 +280,8 @@ window.addEventListener("click", (event) => {
   if (scene.meeting) {
     const button = getMeetingButtonBounds();
     if (isInsideButton(x, y, button)) {
-      if (scene.stage < 3) startStage(scene.stage + 1);
-      else resetGame();
+      if (scene.stage < 6) startStage(scene.stage + 1);
+      else scene.screen = "levels";
     }
   } else if (scene.gameOver) {
     const button = getRestartButtonBounds();
@@ -261,7 +320,10 @@ window.addEventListener("blur", () => {
 });
 
 // 아이템 하나의 종류, 위치, 낙하 속도를 각각 무작위로 정한다.
-function createRandomItem(y = Math.random() * scene.height) {
+function createRandomItem(
+  y = Math.random() * scene.height,
+  lane = Math.floor(Math.random() * itemLaneCount),
+) {
   const stage = stages[scene.stage];
   const targetType = Math.random() < stage.targetChance;
   const type = targetType
@@ -270,10 +332,12 @@ function createRandomItem(y = Math.random() * scene.height) {
   const speedLevels = stage.speeds;
   const speedLevel = speedLevels[Math.floor(Math.random() * speedLevels.length)];
   const margin = scene.itemSize * 2;
+  const laneWidth = (scene.width - margin * 2) / itemLaneCount;
 
   return {
     type,
-    x: margin + Math.random() * (scene.width - margin * 2),
+    x: margin + laneWidth * (lane + 0.5),
+    lane,
     y,
     speed: speedLevel.min + Math.random() * (speedLevel.max - speedLevel.min),
     speedLevel: speedLevel.name,
@@ -282,8 +346,11 @@ function createRandomItem(y = Math.random() * scene.height) {
 }
 
 // 아이템은 화면 위쪽에 대기하고, 준비 시간이 지나면 떨어지기 시작한다.
-scene.items = Array.from({ length: 12 }, () =>
-  createRandomItem(-Math.random() * (scene.height + scene.itemSize * 2)),
+scene.items = activeItemLanes.map((lane) =>
+  createRandomItem(
+    -Math.random() * (scene.height + scene.itemSize * 2),
+    lane,
+  ),
 );
 
 // 적란운이 넓게 발달한 하늘 배경과 햇빛을 그린다.
@@ -407,6 +474,366 @@ function drawNightLake() {
   }
 }
 
+// 위풍당당 행진곡에 어울리는 붉은 융단과 황금빛 왕실 홀을 그린다.
+function drawRoyalHall() {
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, "#381b35");
+  wall.addColorStop(0.58, "#713346");
+  wall.addColorStop(1, "#b36b42");
+  ctx.fillStyle = wall;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  const glow = ctx.createRadialGradient(400, 180, 12, 400, 180, 330);
+  glow.addColorStop(0, "rgb(255 218 139 / 35%)");
+  glow.addColorStop(1, "rgb(255 218 139 / 0%)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, scene.width, 420);
+
+  ctx.fillStyle = "#39213b";
+  ctx.beginPath();
+  ctx.moveTo(238, 280);
+  ctx.lineTo(238, 190);
+  ctx.arc(400, 190, 162, Math.PI, 0);
+  ctx.lineTo(562, 280);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#a85c4c";
+  ctx.beginPath();
+  ctx.moveTo(262, 278);
+  ctx.lineTo(262, 190);
+  ctx.arc(400, 190, 138, Math.PI, 0);
+  ctx.lineTo(538, 278);
+  ctx.closePath();
+  ctx.fill();
+
+  [42, 168, 618, 744].forEach((x) => {
+    ctx.fillStyle = "#d3a753";
+    ctx.fillRect(x, 90, 30, 365);
+    ctx.fillStyle = "#f4d889";
+    ctx.fillRect(x - 7, 85, 44, 13);
+    ctx.fillRect(x - 5, 135, 40, 8);
+    ctx.fillRect(x - 5, 426, 40, 13);
+    ctx.fillStyle = "rgb(255 240 184 / 30%)";
+    ctx.fillRect(x + 6, 148, 5, 267);
+    ctx.fillStyle = "#713346";
+    ctx.fillRect(x + 13, 155, 4, 245);
+  });
+
+  ctx.fillStyle = "#d8b15c";
+  ctx.fillRect(312, 289, 176, 5);
+  ctx.fillRect(332, 316, 136, 4);
+  ctx.fillStyle = "#f2dfad";
+  ctx.font = "bold 18px Georgia, serif";
+  ctx.textAlign = "center";
+  ctx.fillText("✦", 400, 278);
+
+  const floor = ctx.createLinearGradient(0, 438, 0, scene.height);
+  floor.addColorStop(0, "#5c2940");
+  floor.addColorStop(1, "#251d32");
+  ctx.fillStyle = floor;
+  ctx.fillRect(0, 438, scene.width, scene.height - 438);
+
+  ctx.fillStyle = "#8b263f";
+  ctx.beginPath();
+  ctx.moveTo(240, 438);
+  ctx.lineTo(560, 438);
+  ctx.lineTo(690, scene.height);
+  ctx.lineTo(110, scene.height);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgb(248 214 139 / 58%)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(240, 438);
+  ctx.lineTo(110, scene.height);
+  ctx.moveTo(560, 438);
+  ctx.lineTo(690, scene.height);
+  ctx.stroke();
+  ctx.textAlign = "start";
+}
+
+// 운명의 붉은 실과 거대한 시계가 드리운 황혼의 무대를 그린다.
+function drawFateStage() {
+  const sky = ctx.createLinearGradient(0, 0, 0, scene.height);
+  sky.addColorStop(0, "#211c35");
+  sky.addColorStop(0.52, "#573149");
+  sky.addColorStop(1, "#bd6654");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  const glow = ctx.createRadialGradient(400, 210, 10, 400, 210, 260);
+  glow.addColorStop(0, "rgb(255 190 139 / 24%)");
+  glow.addColorStop(1, "rgb(255 190 139 / 0%)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, scene.width, 470);
+
+  ctx.save();
+  ctx.globalAlpha = 0.62;
+  ctx.strokeStyle = "#e7cda9";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(400, 207, 116, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(400, 207, 99, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  for (let mark = 0; mark <= 8; mark += 1) {
+    const angle = Math.PI + (mark * Math.PI) / 8;
+    const inner = 101;
+    const outer = mark % 2 === 0 ? 116 : 110;
+    ctx.beginPath();
+    ctx.moveTo(400 + Math.cos(angle) * inner, 207 + Math.sin(angle) * inner);
+    ctx.lineTo(400 + Math.cos(angle) * outer, 207 + Math.sin(angle) * outer);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.fillStyle = "#30243a";
+  ctx.beginPath();
+  ctx.moveTo(0, 408);
+  ctx.quadraticCurveTo(170, 375, 330, 416);
+  ctx.quadraticCurveTo(520, 378, 690, 411);
+  ctx.quadraticCurveTo(750, 395, scene.width, 410);
+  ctx.lineTo(scene.width, scene.height);
+  ctx.lineTo(0, scene.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#433444";
+  ctx.beginPath();
+  ctx.moveTo(0, 455);
+  ctx.quadraticCurveTo(170, 430, 330, 462);
+  ctx.quadraticCurveTo(520, 432, 690, 455);
+  ctx.quadraticCurveTo(750, 444, scene.width, 458);
+  ctx.lineTo(scene.width, scene.height);
+  ctx.lineTo(0, scene.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  ctx.strokeStyle = "#d94b62";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = "#e7465f";
+  ctx.shadowBlur = 9;
+  [
+    [-20, 294, 230, 316, 555, 394, 820, 454],
+    [820, 332, 588, 356, 265, 420, -20, 448],
+    [80, 238, 258, 294, 522, 351, 710, 455],
+    [710, 232, 536, 291, 280, 353, 92, 454],
+  ].forEach(([x1, y1, cx1, cy1, cx2, cy2, x2, y2]) => {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x2, y2);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  ctx.strokeStyle = "rgb(235 213 181 / 55%)";
+  ctx.lineWidth = 2;
+  for (let grass = 0; grass < 34; grass += 1) {
+    const x = (grass * 97 + 23) % scene.width;
+    const y = 470 + (grass * 29) % 115;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 6);
+    ctx.lineTo(x - 3, y);
+    ctx.moveTo(x, y + 6);
+    ctx.lineTo(x + 4, y - 2);
+    ctx.stroke();
+  }
+}
+
+// 시계와 붉은 실을 무대 장식으로 품은 대형 오케스트라 홀을 그린다.
+function drawOrchestraHall() {
+  const wall = ctx.createLinearGradient(0, 0, 0, 438);
+  wall.addColorStop(0, "#191624");
+  wall.addColorStop(0.55, "#382536");
+  wall.addColorStop(1, "#76503f");
+  ctx.fillStyle = wall;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  const stageGlow = ctx.createRadialGradient(400, 300, 10, 400, 300, 390);
+  stageGlow.addColorStop(0, "rgb(255 214 151 / 39%)");
+  stageGlow.addColorStop(1, "rgb(255 214 151 / 0%)");
+  ctx.fillStyle = stageGlow;
+  ctx.fillRect(0, 0, scene.width, 450);
+
+  ctx.fillStyle = "#251b2c";
+  ctx.beginPath();
+  ctx.moveTo(132, 335);
+  ctx.lineTo(132, 147);
+  ctx.quadraticCurveTo(400, -35, 668, 147);
+  ctx.lineTo(668, 335);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#b68b56";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(133, 332);
+  ctx.lineTo(133, 147);
+  ctx.quadraticCurveTo(400, -29, 667, 147);
+  ctx.lineTo(667, 332);
+  ctx.stroke();
+  ctx.strokeStyle = "rgb(235 205 151 / 54%)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(157, 325);
+  ctx.lineTo(157, 157);
+  ctx.quadraticCurveTo(400, 5, 643, 157);
+  ctx.lineTo(643, 325);
+  ctx.stroke();
+
+  for (let balcony = 0; balcony < 2; balcony += 1) {
+    const y = 206 + balcony * 80;
+    ctx.fillStyle = balcony === 0 ? "#472836" : "#392333";
+    ctx.fillRect(0, y, scene.width, 56);
+    ctx.fillStyle = "#bd9257";
+    ctx.fillRect(0, y + 51, scene.width, 6);
+    for (let seat = 0; seat < 16; seat += 1) {
+      const x = 14 + seat * 51;
+      ctx.fillStyle = "rgb(236 200 135 / 35%)";
+      ctx.fillRect(x, y + 11, 34, 30);
+      ctx.fillStyle = "#8b3c48";
+      ctx.fillRect(x + 4, y + 16, 26, 19);
+    }
+  }
+
+  ctx.strokeStyle = "#d1a96b";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(400, 0);
+  ctx.lineTo(400, 31);
+  ctx.stroke();
+  ctx.fillStyle = "#e4c47d";
+  ctx.beginPath();
+  ctx.arc(400, 49, 12, 0, Math.PI * 2);
+  ctx.fill();
+  for (let ray = 0; ray < 12; ray += 1) {
+    const angle = (ray * Math.PI * 2) / 12;
+    const outer = ray % 2 === 0 ? 46 : 34;
+    ctx.strokeStyle = ray % 2 === 0 ? "#e4c47d" : "#a9744e";
+    ctx.lineWidth = ray % 2 === 0 ? 4 : 2;
+    ctx.beginPath();
+    ctx.moveTo(400 + Math.cos(angle) * 15, 49 + Math.sin(angle) * 15);
+    ctx.lineTo(400 + Math.cos(angle) * outer, 49 + Math.sin(angle) * outer);
+    ctx.stroke();
+    if (ray % 2 === 0) {
+      ctx.fillStyle = "#ffe8a6";
+      ctx.beginPath();
+      ctx.arc(400 + Math.cos(angle) * outer, 49 + Math.sin(angle) * outer, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.fillStyle = "#762b42";
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(168, 0);
+  ctx.quadraticCurveTo(144, 146, 180, 328);
+  ctx.lineTo(0, 350);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(scene.width, 0);
+  ctx.lineTo(632, 0);
+  ctx.quadraticCurveTo(656, 146, 620, 328);
+  ctx.lineTo(scene.width, 350);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#d3a753";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(166, 0);
+  ctx.quadraticCurveTo(148, 160, 174, 326);
+  ctx.moveTo(634, 0);
+  ctx.quadraticCurveTo(652, 160, 626, 326);
+  ctx.stroke();
+
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.strokeStyle = "#e7cda9";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(400, 166, 66, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(400, 166, 54, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  for (let mark = 0; mark <= 8; mark += 1) {
+    const angle = Math.PI + (mark * Math.PI) / 8;
+    const outer = mark % 2 === 0 ? 65 : 60;
+    ctx.beginPath();
+    ctx.moveTo(400 + Math.cos(angle) * 55, 166 + Math.sin(angle) * 55);
+    ctx.lineTo(400 + Math.cos(angle) * outer, 166 + Math.sin(angle) * outer);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.fillStyle = "#211b27";
+  ctx.fillRect(0, 329, scene.width, 117);
+  for (let row = 0; row < 3; row += 1) {
+    const y = 340 + row * 32;
+    const inset = row * 35;
+    for (let seat = 0; seat < 13; seat += 1) {
+      const x = inset + seat * 69 - 12;
+      ctx.fillStyle = "#612b3e";
+      ctx.beginPath();
+      ctx.roundRect(x, y, 45, 20, 5);
+      ctx.fill();
+      ctx.fillStyle = "#b58b58";
+      ctx.fillRect(x - 2, y + 18, 49, 3);
+    }
+  }
+
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = "#ef5268";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = "#e7465f";
+  ctx.shadowBlur = 8;
+  [
+    [35, 285, 203, 300, 584, 307, 766, 280],
+    [766, 296, 596, 310, 226, 300, 35, 286],
+  ].forEach(([x1, y1, cx1, cy1, cx2, cy2, x2, y2]) => {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x2, y2);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  ctx.fillStyle = "#30243a";
+  ctx.fillRect(0, 430, scene.width, scene.height - 430);
+  ctx.fillStyle = "#782b43";
+  ctx.beginPath();
+  ctx.moveTo(250, 430);
+  ctx.lineTo(550, 430);
+  ctx.lineTo(700, scene.height);
+  ctx.lineTo(100, scene.height);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgb(248 214 139 / 70%)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(250, 430);
+  ctx.lineTo(100, scene.height);
+  ctx.moveTo(550, 430);
+  ctx.lineTo(700, scene.height);
+  ctx.stroke();
+  ctx.strokeStyle = "rgb(255 221 159 / 22%)";
+  ctx.lineWidth = 2;
+  for (let floorLine = 0; floorLine < 6; floorLine += 1) {
+    const y = 460 + floorLine * 27;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(scene.width, y);
+    ctx.stroke();
+  }
+  ctx.textAlign = "start";
+}
+
 // 별똥별이 흐르는 밤하늘과 어두운 들판을 그린다.
 function drawShootingStarField() {
   const sky = ctx.createLinearGradient(0, 0, 0, scene.height);
@@ -475,6 +902,119 @@ function drawShootingStarField() {
     ctx.moveTo(x, y + 5);
     ctx.lineTo(x + 3, y - 2);
     ctx.stroke();
+  }
+}
+
+function drawFlowerField() {
+  const sky = ctx.createLinearGradient(0, 0, 0, 460);
+  sky.addColorStop(0, "#42b9ed");
+  sky.addColorStop(0.55, "#8de1ff");
+  sky.addColorStop(1, "#e4f8d2");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  const sunGlow = ctx.createRadialGradient(690, 92, 12, 690, 92, 190);
+  sunGlow.addColorStop(0, "rgb(255 255 214 / 96%)");
+  sunGlow.addColorStop(0.22, "rgb(255 244 145 / 62%)");
+  sunGlow.addColorStop(1, "rgb(255 239 122 / 0%)");
+  ctx.fillStyle = sunGlow;
+  ctx.fillRect(470, 0, 330, 300);
+  ctx.fillStyle = "#fff8b6";
+  ctx.beginPath();
+  ctx.arc(690, 92, 38, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgb(255 255 255 / 82%)";
+  [[126, 112, 52], [350, 78, 42], [521, 144, 34]].forEach(([x, y, radius]) => {
+    ctx.beginPath();
+    ctx.ellipse(x, y, radius, radius * 0.28, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - radius * 0.34, y - 7, radius * 0.42, radius * 0.3, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + radius * 0.25, y - 9, radius * 0.5, radius * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = "#75cb78";
+  ctx.beginPath();
+  ctx.moveTo(0, 360);
+  ctx.quadraticCurveTo(150, 296, 310, 354);
+  ctx.quadraticCurveTo(510, 285, 800, 349);
+  ctx.lineTo(800, 480);
+  ctx.lineTo(0, 480);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#54b95f";
+  ctx.beginPath();
+  ctx.moveTo(0, 407);
+  ctx.quadraticCurveTo(174, 346, 356, 400);
+  ctx.quadraticCurveTo(578, 344, 800, 396);
+  ctx.lineTo(800, 600);
+  ctx.lineTo(0, 600);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#397d43";
+  ctx.lineWidth = 31;
+  ctx.beginPath();
+  ctx.moveTo(126, 433);
+  ctx.quadraticCurveTo(135, 153, 400, 143);
+  ctx.quadraticCurveTo(665, 153, 674, 433);
+  ctx.stroke();
+  ctx.strokeStyle = "#79bd5f";
+  ctx.lineWidth = 18;
+  ctx.beginPath();
+  ctx.moveTo(126, 433);
+  ctx.quadraticCurveTo(135, 153, 400, 143);
+  ctx.quadraticCurveTo(665, 153, 674, 433);
+  ctx.stroke();
+
+  for (let vine = 0; vine < 17; vine += 1) {
+    const side = vine % 2 === 0 ? 1 : -1;
+    const t = Math.floor(vine / 2) / 8;
+    const x = side === 1 ? 126 + 274 * t : 400 + 274 * t;
+    const archT = (x - 126) / 548;
+    const y = 143 + 290 * 4 * (archT - 0.5) ** 2;
+    ctx.fillStyle = vine % 3 === 0 ? "#2f944b" : "#438f48";
+    ctx.beginPath();
+    ctx.ellipse(x + side * 13, y, 14, 6, side * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let bloom = 0; bloom < 27; bloom += 1) {
+    const t = bloom / 26;
+    const x = 126 + 548 * t;
+    const y = 143 + 290 * 4 * (t - 0.5) ** 2;
+    const size = 8 + (bloom % 3) * 2;
+    ctx.fillStyle = "#ffd7a3";
+    ctx.beginPath();
+    ctx.arc(x, y, size + 3, 0, Math.PI * 2);
+    ctx.fill();
+    drawFlowerIcon(x, y, size);
+  }
+  ctx.restore();
+
+  const fieldFlowerColors = ["#fff0a8", "#fff5f1", "#f7a4c4", "#c2a8ff"];
+  for (let bloom = 0; bloom < 58; bloom += 1) {
+    const x = (bloom * 137 + 19) % scene.width;
+    const y = 421 + (bloom * 43) % 175;
+    const size = 4 + (bloom % 4);
+    ctx.strokeStyle = "#347f42";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y + size * 2);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.fillStyle = fieldFlowerColors[bloom % fieldFlowerColors.length];
+    for (let petal = 0; petal < 5; petal += 1) {
+      const angle = (petal * Math.PI * 2) / 5;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(angle) * size * 0.75, y + Math.sin(angle) * size * 0.75, size * 0.43, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#f2b83e";
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.32, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -704,6 +1244,24 @@ function drawSunflowerIcon(x, y, size) {
   ctx.restore();
 }
 
+function drawFlowerIcon(x, y, size) {
+  const petalColors = ["#ff82a8", "#ffb0ca", "#d9a1ff", "#ff9d86"];
+  ctx.save();
+  ctx.translate(x, y);
+  for (let petal = 0; petal < 8; petal += 1) {
+    ctx.fillStyle = petalColors[petal % petalColors.length];
+    ctx.beginPath();
+    ctx.ellipse(0, -size * 0.53, size * 0.25, size * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.rotate(Math.PI / 4);
+  }
+  ctx.fillStyle = "#ffd447";
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 // 여름 아이템이 아닌 눈송이 아이콘을 그린다.
 function drawSnowflakeIcon(x, y, size) {
   // 눈송이를 중심에서 그리도록 좌표와 설정을 저장한다.
@@ -888,6 +1446,37 @@ function drawStarIcon(x, y, size) {
   ctx.fill();
 }
 
+function drawCrownIcon(x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(size / 32, size / 32);
+  ctx.fillStyle = "#f4c542";
+  ctx.strokeStyle = "#fff0a8";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-20, -8);
+  ctx.lineTo(-11, 0);
+  ctx.lineTo(-7, -17);
+  ctx.lineTo(0, -5);
+  ctx.lineTo(8, -18);
+  ctx.lineTo(12, 0);
+  ctx.lineTo(21, -8);
+  ctx.lineTo(17, 15);
+  ctx.lineTo(-16, 15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#b73e4e";
+  ctx.beginPath();
+  ctx.arc(-7, -12, 2.5, 0, Math.PI * 2);
+  ctx.arc(8, -13, 2.5, 0, Math.PI * 2);
+  ctx.arc(0, -1, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffe28a";
+  ctx.fillRect(-16, 15, 33, 5);
+  ctx.restore();
+}
+
 // 박쥐 아이콘을 그린다.
 function drawBatIcon(x, y, size) {
   // 박쥐 몸통과 양쪽 날개를 진한 보라색 경로로 그린다.
@@ -923,7 +1512,7 @@ function drawWalnutIcon(x, y, size) {
   ctx.stroke();
 }
 
-// 아이템 종류에 맞는 작은 그림을 그리고, 해바라기만 테두리로 표시한다.
+// 아이템 종류에 맞는 작은 그림을 그린다.
 function drawItem(item) {
   // 아이템 설정에서 위치와 아이콘 종류를 꺼낸다.
   const { x, y, type } = item;
@@ -932,6 +1521,8 @@ function drawItem(item) {
   // 작은 모양의 방해 아이콘은 해바라기와 비슷하게 보이도록 확대한다.
   const iconScale = {
     sunflower: 1,
+    flower: 1,
+    crown: 1.5,
     snowflake: 1,
     snowman: 1.5,
     glove: 1.6,
@@ -948,6 +1539,7 @@ function drawItem(item) {
 
   // 아이템 종류에 맞는 그리기 함수를 골라 해당 좌표에 그린다.
   if (type === "sunflower") drawSunflowerIcon(x, y, iconSize);
+  if (type === "flower") drawFlowerIcon(x, y, iconSize);
   if (type === "snowflake") drawSnowflakeIcon(x, y, iconSize);
   if (type === "snowman") drawSnowmanIcon(x, y, iconSize);
   if (type === "glove") drawGloveIcon(x, y, iconSize);
@@ -956,6 +1548,7 @@ function drawItem(item) {
   if (type === "redYarn") drawRedYarnIcon(x, y, iconSize);
   if (type === "leaf") drawLeafIcon(x, y, iconSize);
   if (type === "star") drawStarIcon(x, y, iconSize);
+  if (type === "crown") drawCrownIcon(x, y, iconSize);
   if (type === "bat") drawBatIcon(x, y, iconSize);
   if (type === "walnut") drawWalnutIcon(x, y, iconSize);
 }
@@ -1223,7 +1816,7 @@ function drawGauge() {
   ctx.textAlign = "start";
 }
 
-// 목표 아이템이라는 제목 아래에 수집할 해바라기 표시만 둔다.
+// 목표 아이템이라는 제목 아래에 현재 스테이지의 목표 표시를 둔다.
 function drawLegend() {
   // 화면 왼쪽 중간에 놓일 목표 아이템 안내 칸의 위치와 크기를 꺼낸다.
   const { x, y, width, height } = scene.hud.target;
@@ -1242,6 +1835,9 @@ function drawLegend() {
   const target = stages[scene.stage].target;
   if (target === "sunflower") drawSunflowerIcon(x + width / 2, y + 56, scene.itemSize * 0.65);
   else if (target === "swan") drawSwanIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
+  else if (target === "crown") drawCrownIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
+  else if (target === "redYarn") drawRedYarnIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
+  else if (target === "flower") drawFlowerIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
   else drawStarIcon(x + width / 2, y + 56, scene.itemSize * 1.15);
   // 다음 Canvas 텍스트를 왼쪽 정렬로 되돌린다.
   ctx.textAlign = "start";
@@ -1255,7 +1851,10 @@ function drawFirstScreen() {
     // 하늘 앞에 언덕과 잔디밭을 그린다.
     drawLandscape();
   } else if (scene.stage === 2) drawNightLake();
-  else drawShootingStarField();
+  else if (scene.stage === 3) drawShootingStarField();
+  else if (scene.stage === 4) drawRoyalHall();
+  else if (scene.stage === 5) drawOrchestraHall();
+  else drawFlowerField();
   // 설정에 등록된 해바라기와 방해 아이템을 모두 그린다.
   scene.items.forEach(drawItem);
   // 아이템 앞쪽에 지휘자를 그린다.
@@ -1289,6 +1888,7 @@ function updateConductor() {
 // 다음 스테이지의 곡과 목표 아이템에 맞춰 게임을 준비한다.
 function startStage(stage) {
   scene.stage = stage;
+  scene.retryStage = stage;
   scene.screen = "playing";
   scene.meeting = false;
   scene.gameOver = false;
@@ -1303,7 +1903,10 @@ function startStage(stage) {
   scene.items.forEach((item) => {
     Object.assign(
       item,
-      createRandomItem(-Math.random() * (scene.height + scene.itemSize * 2)),
+      createRandomItem(
+        -Math.random() * (scene.height + scene.itemSize * 2),
+        item.lane,
+      ),
     );
   });
 }
@@ -1312,13 +1915,16 @@ function startStage(stage) {
 function resetItem(item) {
   Object.assign(
     item,
-    createRandomItem(-Math.random() * scene.height - scene.itemSize * 2),
+    createRandomItem(
+      -Math.random() * scene.height - scene.itemSize * 2,
+      item.lane,
+    ),
   );
 }
 
-// 게임 오버 뒤 다시 시작할 수 있도록 플레이 상태와 아이템을 초기화한다.
+// 게임 오버 뒤 현재 스테이지를 다시 시작한다.
 function resetGame() {
-  startStage(1);
+  startStage(scene.retryStage);
 }
 
 // 아이템마다 따로 떨어뜨리고, 잔디에 닿거나 지휘자와 부딪히면 처리한다.
@@ -1335,14 +1941,15 @@ function updateItems() {
     }
 
     const conductor = scene.conductor;
-    const conductorHalfWidth = 45 * conductor.scale;
-    const conductorTop = conductor.y - 34 * conductor.scale;
-    const conductorBottom = conductor.y + 131 * conductor.scale;
+    const hitRadius = scene.itemSize * 0.55;
+    const conductorHalfWidth = 30 * conductor.scale;
+    const conductorTop = conductor.y - 35 * conductor.scale;
+    const conductorBottom = conductor.y + 120 * conductor.scale;
     const touchesConductor =
-      item.x + itemRadius >= conductor.x - conductorHalfWidth &&
-      item.x - itemRadius <= conductor.x + conductorHalfWidth &&
-      item.y + itemRadius >= conductorTop &&
-      item.y - itemRadius <= conductorBottom;
+      item.x + hitRadius >= conductor.x - conductorHalfWidth &&
+      item.x - hitRadius <= conductor.x + conductorHalfWidth &&
+      item.y + hitRadius >= conductorTop &&
+      item.y - hitRadius <= conductorBottom;
 
     if (touchesConductor) {
       if (item.collectible) {
@@ -1514,7 +2121,7 @@ function drawLevelSelectScreen() {
 
   for (let stage = 1; stage <= 10; stage += 1) {
     const bounds = getLevelCardBounds(stage);
-    const unlocked = stage <= 3;
+    const unlocked = stage <= 6;
     ctx.fillStyle = unlocked ? "rgb(25 91 130 / 90%)" : "rgb(37 45 64 / 90%)";
     ctx.beginPath();
     ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 10);
@@ -1532,7 +2139,7 @@ function drawLevelSelectScreen() {
     if (unlocked) {
       ctx.font = "11px Arial, 'Malgun Gothic', sans-serif";
       ctx.fillStyle = colors.text;
-      ctx.fillText(stages[stage].song, bounds.x + bounds.width / 2, bounds.y + 79);
+      ctx.fillText(stages[stage].song, bounds.x + bounds.width / 2, bounds.y + 79, bounds.width - 10);
     }
   }
   drawMenuButton(getLevelHomeButtonBounds(), "홈으로");
@@ -1605,7 +2212,18 @@ function drawMusicaMeeting() {
   ctx.fillStyle = "rgb(9 17 34 / 78%)";
   ctx.fillRect(0, 0, scene.width, scene.height);
 
-  ctx.fillStyle = scene.stage === 1 ? "#fff3cf" : scene.stage === 2 ? "#e4efff" : "#fff0a8";
+  ctx.fillStyle =
+    scene.stage === 1
+      ? "#fff3cf"
+      : scene.stage === 2
+        ? "#e4efff"
+        : scene.stage === 3
+          ? "#fff0a8"
+          : scene.stage === 4
+            ? "#f4d889"
+            : scene.stage === 5
+              ? "#f4a0aa"
+              : "#fff3cf";
   ctx.textAlign = "center";
   ctx.font = "bold 30px Arial, sans-serif";
   ctx.fillText("MUSICA CATCH!", scene.width / 2, 103);
@@ -1626,20 +2244,42 @@ function drawMusicaMeeting() {
   });
 
   drawMusicaCharacter(scene.stage);
-  ctx.fillStyle = scene.stage === 1 ? "#ffe39b" : scene.stage === 2 ? "#dce9ff" : "#fff0a8";
+  ctx.fillStyle =
+    scene.stage === 1
+      ? "#ffe39b"
+      : scene.stage === 2
+        ? "#dce9ff"
+        : scene.stage === 3
+          ? "#fff0a8"
+          : scene.stage === 4
+            ? "#f4d889"
+            : scene.stage === 5
+              ? "#f4a0aa"
+              : "#ffcf74";
   ctx.textAlign = "center";
   ctx.font = "bold 18px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText(stageInfo.title, 634, 465);
 
   const button = getMeetingButtonBounds();
-  ctx.fillStyle = scene.stage === 1 ? "#ffd447" : scene.stage === 2 ? "#d9e7ff" : "#ffe27a";
+  ctx.fillStyle =
+    scene.stage === 1
+      ? "#ffd447"
+      : scene.stage === 2
+        ? "#d9e7ff"
+        : scene.stage === 3
+          ? "#ffe27a"
+          : scene.stage === 4
+            ? "#f4d889"
+            : scene.stage === 5
+              ? "#f4a0aa"
+              : "#ffd447";
   ctx.beginPath();
   ctx.roundRect(button.x, button.y, button.width, button.height, 12);
   ctx.fill();
   ctx.fillStyle = "#26364a";
   ctx.font = "bold 17px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText(
-    scene.stage < 3 ? "다음 무지카를 만나러 가기" : "처음으로 돌아가기",
+    scene.stage < 6 ? "다음 무지카를 만나러 가기" : "레벨 선택으로",
     button.x + button.width / 2,
     button.y + 34,
   );
@@ -1650,6 +2290,9 @@ function drawMusicaMeeting() {
 function drawMusicaCharacter(stage) {
   const isSwan = stage === 2;
   const isStar = stage === 3;
+  const isCrown = stage === 4;
+  const isFate = stage === 5;
+  const isFlower = stage === 6;
   ctx.save();
   ctx.translate(634, 349);
   ctx.scale(0.9, 0.9);
@@ -1670,6 +2313,57 @@ function drawMusicaCharacter(stage) {
       ctx.quadraticCurveTo(55, 17 + feather * 2, 34, 20);
       ctx.stroke();
     }
+  } else if (isCrown) {
+    ctx.fillStyle = "#6e243a";
+    ctx.beginPath();
+    ctx.moveTo(-44, 0);
+    ctx.lineTo(-76, 126);
+    ctx.quadraticCurveTo(0, 153, 76, 126);
+    ctx.lineTo(44, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#f4d889";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-51, 35);
+    ctx.quadraticCurveTo(0, 50, 51, 35);
+    ctx.stroke();
+  } else if (isFate) {
+    ctx.fillStyle = "#fff8f5";
+    ctx.beginPath();
+    ctx.moveTo(-44, 0);
+    ctx.quadraticCurveTo(-59, 64, -76, 128);
+    ctx.quadraticCurveTo(0, 151, 76, 128);
+    ctx.quadraticCurveTo(59, 64, 44, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#bd344b";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(-45, 12);
+    ctx.quadraticCurveTo(-22, 43, 0, 44);
+    ctx.quadraticCurveTo(27, 44, 45, 12);
+    ctx.stroke();
+    ctx.strokeStyle = "#e7b6b5";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-63, 117);
+    ctx.quadraticCurveTo(0, 137, 63, 117);
+    ctx.stroke();
+  } else if (isFlower) {
+    ctx.fillStyle = "#70a75b";
+    ctx.beginPath();
+    ctx.ellipse(-48, 16, 24, 53, -0.48, 0, Math.PI * 2);
+    ctx.ellipse(48, 16, 24, 53, 0.48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#d9e8a5";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-60, 42);
+    ctx.lineTo(-39, -5);
+    ctx.moveTo(60, 42);
+    ctx.lineTo(39, -5);
+    ctx.stroke();
   } else if (!isStar) {
     ctx.fillStyle = "#f2a64a";
     ctx.beginPath();
@@ -1686,7 +2380,17 @@ function drawMusicaCharacter(stage) {
     }
   }
 
-  ctx.fillStyle = isSwan ? "#e8eefc" : isStar ? "#f5c95d" : "#e98d62";
+  ctx.fillStyle = isSwan
+    ? "#e8eefc"
+    : isStar
+      ? "#f5c95d"
+      : isCrown
+        ? "#9b3047"
+        : isFate
+          ? "#fff4ef"
+          : isFlower
+            ? "#fff0e8"
+            : "#e98d62";
   ctx.beginPath();
   ctx.moveTo(-42, 5);
   ctx.quadraticCurveTo(-58, 60, -74, 124);
@@ -1699,7 +2403,17 @@ function drawMusicaCharacter(stage) {
   ctx.beginPath();
   ctx.arc(0, -48, 34, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = isSwan ? "#18243d" : isStar ? "#754b7e" : "#7c3c28";
+  ctx.fillStyle = isSwan
+    ? "#18243d"
+    : isStar
+      ? "#754b7e"
+      : isCrown
+        ? "#382336"
+        : isFate
+          ? "#762a40"
+          : isFlower
+            ? "#477246"
+            : "#7c3c28";
   ctx.beginPath();
   ctx.arc(0, -60, 35, Math.PI, Math.PI * 2);
   ctx.lineTo(32, -40);
@@ -1719,7 +2433,21 @@ function drawMusicaCharacter(stage) {
   ctx.arc(0, -39, 7, 0.2, Math.PI - 0.2);
   ctx.stroke();
 
-  if (isSwan) {
+  if (isFate) {
+    ctx.fillStyle = "#bd344b";
+    ctx.beginPath();
+    ctx.arc(0, -89, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#f4a0aa";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, -89);
+    ctx.bezierCurveTo(22, -112, 31, -84, 15, -72);
+    ctx.bezierCurveTo(5, -64, -4, -78, 4, -84);
+    ctx.stroke();
+  } else if (isCrown) {
+    drawCrownIcon(0, -89, 39);
+  } else if (isSwan) {
     ctx.fillStyle = "#f5f0d7";
     ctx.beginPath();
     ctx.ellipse(0, -87, 30, 7, 0, 0, Math.PI * 2);
@@ -1733,6 +2461,11 @@ function drawMusicaCharacter(stage) {
     ctx.lineTo(13, -88);
     ctx.closePath();
     ctx.fill();
+  } else if (isFlower) {
+    for (let bloom = 0; bloom < 5; bloom += 1) {
+      const x = -30 + bloom * 15;
+      drawFlowerIcon(x, -88 + Math.abs(2 - bloom) * 2, 13);
+    }
   } else if (isStar) {
     ctx.fillStyle = "#fff3b0";
     ctx.beginPath();
