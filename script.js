@@ -12,10 +12,14 @@ const scene = {
   clouds: [], // 크기와 위치, 속도가 제각각인 이동 구름
   cumulonimbus: { baseY: 365 }, // 적란운 덩어리가 하늘 아래쪽에 닿는 높이
   stars: [], // 별의 좌표를 넣으면 하늘에 별을 그린다.
+  shootingStars: [], // 밤하늘을 가로지르는 별똥별
+  nextShootingStarAt: performance.now() + 700, // 다음 별똥별이 나타날 시각
   itemSize: 20, // 떨어지는 모든 아이템의 기준 크기
   items: [], // 각각 위치와 속도가 다른 낙하 아이템
   conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
+  screen: "home", // 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
+  volume: 70, // 사운드 슬라이더 값
   stage: 1, // 현재 진행 중인 스테이지
   meeting: false, // 게이지를 채우고 무지카를 만나는 화면인지 나타낸다.
   gameOver: false, // 라이프를 모두 잃으면 게임을 멈춘다.
@@ -134,10 +138,37 @@ const stages = {
       { name: "빠르게", min: 3.2, max: 4 },
     ],
   },
+  3: {
+    song: "모차르트 - 작은 별 변주곡",
+    title: "별",
+    target: "star",
+    targetChance: 2 / 14,
+    decoyTypes: allDecoyTypes.filter((type) => type !== "star"),
+    dialogue: [
+      "우와, 드디어 만났다!",
+      "나는 모차르트의 작은 별 변주곡!",
+      "그냥 별이라고 불러도 돼!",
+      "나랑 같이 반짝반짝 모험하자!",
+    ],
+    speeds: [
+      { name: "느리게", min: 2.2, max: 2.8 },
+      { name: "중간", min: 3.1, max: 3.7 },
+      { name: "빠르게", min: 4.2, max: 5 },
+    ],
+  },
 };
 
 window.addEventListener("keydown", (event) => {
-  if (scene.gameOver || scene.meeting) return;
+  if (event.key === "Escape") {
+    if (scene.screen === "playing") scene.screen = "pause";
+    else if (scene.screen === "pause") scene.screen = "playing";
+    else if (scene.screen === "controls") scene.screen = "pause";
+    scene.keys.left = false;
+    scene.keys.right = false;
+    event.preventDefault();
+    return;
+  }
+  if (scene.screen !== "playing" || scene.gameOver || scene.meeting) return;
   if (event.key === "ArrowLeft") {
     scene.keys.left = true;
     event.preventDefault();
@@ -154,26 +185,79 @@ window.addEventListener("keyup", (event) => {
 });
 
 window.addEventListener("click", (event) => {
-  const bounds = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / bounds.width;
-  const scaleY = canvas.height / bounds.height;
-  const clickX = (event.clientX - bounds.left) * scaleX;
-  const clickY = (event.clientY - bounds.top) * scaleY;
+  const { x, y } = getCanvasPoint(event);
+  if (scene.screen === "home") {
+    if (isInsideButton(x, y, getHomeButtonBounds())) scene.screen = "levels";
+    return;
+  }
+  if (scene.screen === "levels") {
+    for (let stage = 1; stage <= 10; stage += 1) {
+      if (stage <= 3 && isInsideButton(x, y, getLevelCardBounds(stage))) {
+        startStage(stage);
+        return;
+      }
+    }
+    if (isInsideButton(x, y, getLevelHomeButtonBounds())) scene.screen = "home";
+    return;
+  }
+  if (scene.screen === "pause") {
+    if (isInsideButton(x, y, getPauseButtonBounds("resume"))) {
+      scene.screen = "playing";
+    } else if (isInsideButton(x, y, getPauseButtonBounds("home"))) {
+      scene.screen = "home";
+    } else if (isInsideButton(x, y, getPauseButtonBounds("levels"))) {
+      scene.screen = "levels";
+    } else if (isInsideButton(x, y, getPauseButtonBounds("controls"))) {
+      scene.screen = "controls";
+    }
+    return;
+  }
+  if (scene.screen === "controls") {
+    if (isInsideButton(x, y, getPauseButtonBounds("controlsBack"))) {
+      scene.screen = "pause";
+    }
+    return;
+  }
   if (scene.meeting) {
     const button = getMeetingButtonBounds();
-    if (isInsideButton(clickX, clickY, button)) {
-      if (scene.stage === 1) startStage(2);
+    if (isInsideButton(x, y, button)) {
+      if (scene.stage < 3) startStage(scene.stage + 1);
       else resetGame();
     }
   } else if (scene.gameOver) {
     const button = getRestartButtonBounds();
-    if (isInsideButton(clickX, clickY, button)) resetGame();
+    if (isInsideButton(x, y, button)) resetGame();
   }
+});
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (scene.screen !== "pause") return;
+  const { x, y } = getCanvasPoint(event);
+  const slider = getVolumeSliderBounds();
+  if (isInsideButton(x, y, slider)) {
+    scene.draggingVolume = true;
+    updateVolumeFromPointer(x);
+    canvas.setPointerCapture(event.pointerId);
+  }
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (!scene.draggingVolume) return;
+  updateVolumeFromPointer(getCanvasPoint(event).x);
+});
+
+canvas.addEventListener("pointerup", () => {
+  scene.draggingVolume = false;
+});
+
+canvas.addEventListener("pointercancel", () => {
+  scene.draggingVolume = false;
 });
 
 window.addEventListener("blur", () => {
   scene.keys.left = false;
   scene.keys.right = false;
+  scene.draggingVolume = false;
 });
 
 // 아이템 하나의 종류, 위치, 낙하 속도를 각각 무작위로 정한다.
@@ -321,6 +405,104 @@ function drawNightLake() {
     ctx.lineTo(x + 10 + (glint % 5) * 3, y - 2);
     ctx.stroke();
   }
+}
+
+// 별똥별이 흐르는 밤하늘과 어두운 들판을 그린다.
+function drawShootingStarField() {
+  const sky = ctx.createLinearGradient(0, 0, 0, scene.height);
+  sky.addColorStop(0, "#11152f");
+  sky.addColorStop(0.58, "#29284f");
+  sky.addColorStop(1, "#574365");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  scene.stars.forEach(({ x, y, radius }, index) => {
+    const twinkle = 0.65 + (Math.sin(performance.now() / 360 + index) + 1) * 0.17;
+    ctx.fillStyle = `rgb(255 246 220 / ${twinkle})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  scene.shootingStars.forEach((star) => {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, star.life / 12);
+    ctx.strokeStyle = "#fff4c2";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "#ffe58a";
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(star.x, star.y);
+    ctx.lineTo(star.x + star.length, star.y - star.length * 0.46);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.fillStyle = "#262542";
+  ctx.beginPath();
+  ctx.moveTo(0, 411);
+  ctx.quadraticCurveTo(155, 366, 310, 414);
+  ctx.quadraticCurveTo(495, 365, 650, 405);
+  ctx.quadraticCurveTo(735, 378, scene.width, 405);
+  ctx.lineTo(scene.width, scene.height);
+  ctx.lineTo(0, scene.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#304239";
+  ctx.beginPath();
+  ctx.moveTo(0, 454);
+  ctx.quadraticCurveTo(160, 425, 315, 457);
+  ctx.quadraticCurveTo(480, 430, 640, 454);
+  ctx.quadraticCurveTo(720, 438, scene.width, 452);
+  ctx.lineTo(scene.width, scene.height);
+  ctx.lineTo(0, scene.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgb(170 202 133 / 72%)";
+  ctx.lineWidth = 2;
+  for (let grass = 0; grass < 55; grass += 1) {
+    const x = (grass * 79 + 18) % scene.width;
+    const y = 468 + (grass * 23) % 120;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 5);
+    ctx.lineTo(x - 2, y);
+    ctx.moveTo(x, y + 5);
+    ctx.lineTo(x + 3, y - 2);
+    ctx.stroke();
+  }
+}
+
+function updateShootingStars() {
+  if (scene.stage !== 3) {
+    scene.shootingStars = [];
+    return;
+  }
+
+  const now = performance.now();
+  if (now >= scene.nextShootingStarAt) {
+    scene.shootingStars.push({
+      x: 120 + Math.random() * (scene.width - 120),
+      y: 25 + Math.random() * 175,
+      length: 28 + Math.random() * 38,
+      life: 24,
+    });
+    scene.nextShootingStarAt = now + 650 + Math.random() * 850;
+  }
+
+  scene.shootingStars.forEach((star) => {
+    star.x -= 5.2;
+    star.y += 2.8;
+    star.life -= 1;
+  });
+  scene.shootingStars = scene.shootingStars.filter(
+    (star) => star.life > 0 && star.x > -60,
+  );
 }
 
 // 작은 구름들이 서로 다른 속도로 하늘을 지나가게 한다.
@@ -1057,25 +1239,23 @@ function drawLegend() {
   // 배경 칸 위쪽에 "목표 아이템"이라고 쓴다.
   ctx.fillText("목표 아이템", x + width / 2, y + 23);
   // 제목 바로 아래에 현재 스테이지의 목표 아이콘을 그린다.
-  if (stages[scene.stage].target === "swan") {
-    drawSwanIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
-  } else {
-    drawSunflowerIcon(x + width / 2, y + 56, scene.itemSize * 0.65);
-  }
+  const target = stages[scene.stage].target;
+  if (target === "sunflower") drawSunflowerIcon(x + width / 2, y + 56, scene.itemSize * 0.65);
+  else if (target === "swan") drawSwanIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
+  else drawStarIcon(x + width / 2, y + 56, scene.itemSize * 1.15);
   // 다음 Canvas 텍스트를 왼쪽 정렬로 되돌린다.
   ctx.textAlign = "start";
 }
 
 // 배경, 아이템, 지휘자와 지휘자 아래의 게이지를 차례로 그린다.
 function drawFirstScreen() {
-  if (scene.stage === 2) {
-    drawNightLake();
-  } else {
+  if (scene.stage === 1) {
     // 가장 뒤쪽인 하늘과 햇살, 구름을 먼저 그린다.
     drawSky();
     // 하늘 앞에 언덕과 잔디밭을 그린다.
     drawLandscape();
-  }
+  } else if (scene.stage === 2) drawNightLake();
+  else drawShootingStarField();
   // 설정에 등록된 해바라기와 방해 아이템을 모두 그린다.
   scene.items.forEach(drawItem);
   // 아이템 앞쪽에 지휘자를 그린다.
@@ -1109,12 +1289,15 @@ function updateConductor() {
 // 다음 스테이지의 곡과 목표 아이템에 맞춰 게임을 준비한다.
 function startStage(stage) {
   scene.stage = stage;
+  scene.screen = "playing";
   scene.meeting = false;
   scene.gameOver = false;
   scene.hud.lives.count = 3;
   scene.gauge.percent = 0;
   scene.conductor.x = scene.width / 2;
   scene.itemsStartAt = performance.now() + 2000;
+  scene.shootingStars = [];
+  scene.nextShootingStarAt = performance.now() + 500;
   scene.keys.left = false;
   scene.keys.right = false;
   scene.items.forEach((item) => {
@@ -1220,13 +1403,209 @@ function isInsideButton(x, y, button) {
   );
 }
 
+function getCanvasPoint(event) {
+  const bounds = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - bounds.left) * (canvas.width / bounds.width),
+    y: (event.clientY - bounds.top) * (canvas.height / bounds.height),
+  };
+}
+
+function getHomeButtonBounds() {
+  return { x: 290, y: 390, width: 220, height: 58 };
+}
+
+function getLevelCardBounds(stage) {
+  const index = stage - 1;
+  return {
+    x: 35 + (index % 5) * 148,
+    y: 158 + Math.floor(index / 5) * 112,
+    width: 138,
+    height: 96,
+  };
+}
+
+function getLevelHomeButtonBounds() {
+  return { x: 325, y: 408, width: 150, height: 48 };
+}
+
+function getPauseButtonBounds(action) {
+  const bounds = {
+    resume: { x: 300, y: 132, width: 200, height: 48 },
+    home: { x: 300, y: 194, width: 200, height: 48 },
+    levels: { x: 300, y: 358, width: 200, height: 48 },
+    controls: { x: 300, y: 420, width: 200, height: 48 },
+    controlsBack: { x: 325, y: 454, width: 150, height: 46 },
+  };
+  return bounds[action];
+}
+
+function getVolumeSliderBounds() {
+  return { x: 300, y: 286, width: 200, height: 22 };
+}
+
+function updateVolumeFromPointer(x) {
+  const slider = getVolumeSliderBounds();
+  scene.volume = Math.round(
+    Math.min(1, Math.max(0, (x - slider.x) / slider.width)) * 100,
+  );
+}
+
+function drawMenuBackdrop() {
+  const sky = ctx.createLinearGradient(0, 0, 0, scene.height);
+  sky.addColorStop(0, "#15203d");
+  sky.addColorStop(0.7, "#344c70");
+  sky.addColorStop(1, "#314536");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+  scene.stars.forEach(({ x, y, radius }) => {
+    ctx.fillStyle = "rgb(255 246 220 / 82%)";
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.fillStyle = "#26364a";
+  ctx.beginPath();
+  ctx.moveTo(0, 430);
+  ctx.quadraticCurveTo(180, 385, 340, 435);
+  ctx.quadraticCurveTo(580, 390, scene.width, 429);
+  ctx.lineTo(scene.width, scene.height);
+  ctx.lineTo(0, scene.height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawMenuButton(bounds, label, enabled = true) {
+  ctx.fillStyle = enabled ? "#ffd447" : "rgb(116 127 146 / 72%)";
+  ctx.beginPath();
+  ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 10);
+  ctx.fill();
+  ctx.fillStyle = enabled ? "#26364a" : "#e0e3e9";
+  ctx.font = "bold 17px Arial, 'Malgun Gothic', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(label, bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 6);
+  ctx.textAlign = "start";
+}
+
+function drawHomeScreen() {
+  drawMenuBackdrop();
+  ctx.fillStyle = "#fff3cf";
+  ctx.textAlign = "center";
+  ctx.font = "bold 46px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("선율 수집가", scene.width / 2, 220);
+  ctx.fillStyle = colors.text;
+  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("별빛과 선율을 모으러 떠나볼까요?", scene.width / 2, 272);
+  drawMenuButton(getHomeButtonBounds(), "레벨 선택");
+  ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("이동: ← →   |   일시정지: ESC", scene.width / 2, 485);
+  ctx.textAlign = "start";
+}
+
+function drawLevelSelectScreen() {
+  drawMenuBackdrop();
+  ctx.fillStyle = "#fff3cf";
+  ctx.textAlign = "center";
+  ctx.font = "bold 30px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("스테이지 선택", scene.width / 2, 82);
+  ctx.fillStyle = colors.text;
+  ctx.font = "15px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("도전할 레벨을 골라 주세요", scene.width / 2, 112);
+
+  for (let stage = 1; stage <= 10; stage += 1) {
+    const bounds = getLevelCardBounds(stage);
+    const unlocked = stage <= 3;
+    ctx.fillStyle = unlocked ? "rgb(25 91 130 / 90%)" : "rgb(37 45 64 / 90%)";
+    ctx.beginPath();
+    ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 10);
+    ctx.fill();
+    ctx.strokeStyle = unlocked ? "#ffe39b" : "rgb(180 190 205 / 35%)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = unlocked ? "#ffe39b" : "#c5cbd6";
+    ctx.textAlign = "center";
+    ctx.font = "bold 16px Arial, sans-serif";
+    ctx.fillText(`STAGE ${stage}`, bounds.x + bounds.width / 2, bounds.y + 27);
+    ctx.font = unlocked ? "14px Arial, 'Malgun Gothic', sans-serif" : "bold 13px Arial, sans-serif";
+    const title = unlocked ? stages[stage].title : "COMING SOON";
+    ctx.fillText(title, bounds.x + bounds.width / 2, bounds.y + 57);
+    if (unlocked) {
+      ctx.font = "11px Arial, 'Malgun Gothic', sans-serif";
+      ctx.fillStyle = colors.text;
+      ctx.fillText(stages[stage].song, bounds.x + bounds.width / 2, bounds.y + 79);
+    }
+  }
+  drawMenuButton(getLevelHomeButtonBounds(), "홈으로");
+  ctx.textAlign = "start";
+}
+
+function drawPauseMenu() {
+  ctx.fillStyle = "rgb(9 17 34 / 80%)";
+  ctx.fillRect(0, 0, scene.width, scene.height);
+  ctx.fillStyle = "rgb(255 255 255 / 12%)";
+  ctx.beginPath();
+  ctx.roundRect(205, 72, 390, 456, 18);
+  ctx.fill();
+  ctx.fillStyle = colors.text;
+  ctx.textAlign = "center";
+  ctx.font = "bold 30px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("일시정지", scene.width / 2, 111);
+  drawMenuButton(getPauseButtonBounds("resume"), "계속하기");
+  drawMenuButton(getPauseButtonBounds("home"), "홈으로 돌아가기");
+
+  ctx.font = "bold 15px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillStyle = colors.text;
+  ctx.fillText(`사운드 볼륨  ${scene.volume}%`, scene.width / 2, 270);
+  const slider = getVolumeSliderBounds();
+  ctx.fillStyle = "rgb(255 255 255 / 35%)";
+  ctx.beginPath();
+  ctx.roundRect(slider.x, slider.y + 6, slider.width, 10, 5);
+  ctx.fill();
+  ctx.fillStyle = "#ffd447";
+  ctx.beginPath();
+  ctx.roundRect(slider.x, slider.y + 6, slider.width * scene.volume / 100, 10, 5);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(slider.x + slider.width * scene.volume / 100, slider.y + 11, 11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = "12px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillStyle = "#d8deea";
+  ctx.fillText("사운드 재생 기능은 준비 중입니다.", scene.width / 2, 326);
+  drawMenuButton(getPauseButtonBounds("levels"), "레벨 선택으로");
+  drawMenuButton(getPauseButtonBounds("controls"), "조작법 보기");
+  ctx.font = "13px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillStyle = "#d8deea";
+  ctx.fillText("ESC를 눌러 계속하기", scene.width / 2, 500);
+  ctx.textAlign = "start";
+}
+
+function drawControlsScreen() {
+  ctx.fillStyle = "rgb(9 17 34 / 84%)";
+  ctx.fillRect(0, 0, scene.width, scene.height);
+  ctx.fillStyle = "rgb(255 255 255 / 13%)";
+  ctx.beginPath();
+  ctx.roundRect(150, 100, 500, 390, 18);
+  ctx.fill();
+  ctx.fillStyle = colors.text;
+  ctx.textAlign = "center";
+  ctx.font = "bold 30px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("조작 방법", scene.width / 2, 153);
+  ctx.font = "20px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("←  왼쪽으로 이동", scene.width / 2, 225);
+  ctx.fillText("→  오른쪽으로 이동", scene.width / 2, 270);
+  ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 335);
+  ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 377);
+  drawMenuButton(getPauseButtonBounds("controlsBack"), "설정으로");
+  ctx.textAlign = "start";
+}
+
 // 스테이지 클리어 뒤 곡의 성격에 맞는 무지카와 대사를 보여 준다.
 function drawMusicaMeeting() {
   const stageInfo = stages[scene.stage];
   ctx.fillStyle = "rgb(9 17 34 / 78%)";
   ctx.fillRect(0, 0, scene.width, scene.height);
 
-  ctx.fillStyle = scene.stage === 1 ? "#fff3cf" : "#e4efff";
+  ctx.fillStyle = scene.stage === 1 ? "#fff3cf" : scene.stage === 2 ? "#e4efff" : "#fff0a8";
   ctx.textAlign = "center";
   ctx.font = "bold 30px Arial, sans-serif";
   ctx.fillText("MUSICA CATCH!", scene.width / 2, 103);
@@ -1247,20 +1626,20 @@ function drawMusicaMeeting() {
   });
 
   drawMusicaCharacter(scene.stage);
-  ctx.fillStyle = scene.stage === 1 ? "#ffe39b" : "#dce9ff";
+  ctx.fillStyle = scene.stage === 1 ? "#ffe39b" : scene.stage === 2 ? "#dce9ff" : "#fff0a8";
   ctx.textAlign = "center";
   ctx.font = "bold 18px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText(stageInfo.title, 634, 465);
 
   const button = getMeetingButtonBounds();
-  ctx.fillStyle = scene.stage === 1 ? "#ffd447" : "#d9e7ff";
+  ctx.fillStyle = scene.stage === 1 ? "#ffd447" : scene.stage === 2 ? "#d9e7ff" : "#ffe27a";
   ctx.beginPath();
   ctx.roundRect(button.x, button.y, button.width, button.height, 12);
   ctx.fill();
   ctx.fillStyle = "#26364a";
   ctx.font = "bold 17px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText(
-    scene.stage === 1 ? "다음 무지카를 만나러 가기" : "처음으로 돌아가기",
+    scene.stage < 3 ? "다음 무지카를 만나러 가기" : "처음으로 돌아가기",
     button.x + button.width / 2,
     button.y + 34,
   );
@@ -1270,6 +1649,7 @@ function drawMusicaMeeting() {
 // 여름은 햇살빛 의상으로, 백조는 깃털 장식으로 무지카를 표현한다.
 function drawMusicaCharacter(stage) {
   const isSwan = stage === 2;
+  const isStar = stage === 3;
   ctx.save();
   ctx.translate(634, 349);
   ctx.scale(0.9, 0.9);
@@ -1290,15 +1670,23 @@ function drawMusicaCharacter(stage) {
       ctx.quadraticCurveTo(55, 17 + feather * 2, 34, 20);
       ctx.stroke();
     }
-  } else {
+  } else if (!isStar) {
     ctx.fillStyle = "#f2a64a";
     ctx.beginPath();
     ctx.ellipse(-42, 13, 30, 55, -0.25, 0, Math.PI * 2);
     ctx.ellipse(42, 13, 30, 55, 0.25, 0, Math.PI * 2);
     ctx.fill();
+  } else {
+    ctx.fillStyle = "#f6cf62";
+    for (let sparkle = 0; sparkle < 5; sparkle += 1) {
+      const angle = (sparkle * Math.PI * 2) / 5;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * 55, Math.sin(angle) * 23 + 5, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  ctx.fillStyle = isSwan ? "#e8eefc" : "#e98d62";
+  ctx.fillStyle = isSwan ? "#e8eefc" : isStar ? "#f5c95d" : "#e98d62";
   ctx.beginPath();
   ctx.moveTo(-42, 5);
   ctx.quadraticCurveTo(-58, 60, -74, 124);
@@ -1311,7 +1699,7 @@ function drawMusicaCharacter(stage) {
   ctx.beginPath();
   ctx.arc(0, -48, 34, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = isSwan ? "#18243d" : "#7c3c28";
+  ctx.fillStyle = isSwan ? "#18243d" : isStar ? "#754b7e" : "#7c3c28";
   ctx.beginPath();
   ctx.arc(0, -60, 35, Math.PI, Math.PI * 2);
   ctx.lineTo(32, -40);
@@ -1345,6 +1733,17 @@ function drawMusicaCharacter(stage) {
     ctx.lineTo(13, -88);
     ctx.closePath();
     ctx.fill();
+  } else if (isStar) {
+    ctx.fillStyle = "#fff3b0";
+    ctx.beginPath();
+    ctx.arc(0, -89, 8, 0, Math.PI * 2);
+    ctx.fill();
+    for (let point = 0; point < 5; point += 1) {
+      const angle = -Math.PI / 2 + (point * Math.PI * 2) / 5;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * 12, -89 + Math.sin(angle) * 12, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else {
     ctx.fillStyle = "#ffd447";
     ctx.beginPath();
@@ -1376,16 +1775,26 @@ function drawStartNotice() {
 function gameLoop() {
   // 이전 프레임의 그림을 지운다.
   ctx.clearRect(0, 0, scene.width, scene.height);
-  updateClouds();
 
-  if (!scene.gameOver && !scene.meeting) {
-    // 지휘자를 움직이고, 준비 시간이 지난 뒤 아이템을 떨어뜨린다.
-    updateConductor();
-    if (performance.now() >= scene.itemsStartAt) updateItems();
+  if (scene.screen === "home") {
+    drawHomeScreen();
+  } else if (scene.screen === "levels") {
+    drawLevelSelectScreen();
+  } else {
+    if (scene.screen === "playing") {
+      updateClouds();
+      updateShootingStars();
+      if (!scene.gameOver && !scene.meeting) {
+        // 지휘자를 움직이고, 준비 시간이 지난 뒤 아이템을 떨어뜨린다.
+        updateConductor();
+        if (performance.now() >= scene.itemsStartAt) updateItems();
+      }
+    }
+
+    drawFirstScreen();
+    if (scene.screen === "pause") drawPauseMenu();
+    if (scene.screen === "controls") drawControlsScreen();
   }
-
-  // 바뀐 위치를 포함해 현재 게임 화면을 그린다.
-  drawFirstScreen();
 
   // 브라우저에 다음 프레임을 예약한다.
   requestAnimationFrame(gameLoop);
