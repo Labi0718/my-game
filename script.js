@@ -14,8 +14,10 @@ const scene = {
   stars: [], // 별의 좌표를 넣으면 하늘에 별을 그린다.
   itemSize: 20, // 떨어지는 모든 아이템의 기준 크기
   items: [], // 각각 위치와 속도가 다른 낙하 아이템
-  conductor: { x: 400, y: 408, scale: 0.55, speed: 5 }, // 지휘자의 위치, 크기, 좌우 이동 속도
+  conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
+  stage: 1, // 현재 진행 중인 스테이지
+  meeting: false, // 게이지를 채우고 무지카를 만나는 화면인지 나타낸다.
   gameOver: false, // 라이프를 모두 잃으면 게임을 멈춘다.
   itemsStartAt: performance.now() + 2000, // 시작 후 아이템이 떨어지기 전까지 기다릴 시각
   // 각 UI 칸의 위치와 너비·높이
@@ -68,6 +70,11 @@ function createDriftingCloud(x = Math.random() * scene.width) {
 }
 
 scene.clouds = Array.from({ length: 5 }, () => createDriftingCloud());
+scene.stars = Array.from({ length: 55 }, () => ({
+  x: Math.random() * scene.width,
+  y: Math.random() * 285,
+  radius: 0.7 + Math.random() * 1.5,
+}));
 
 const itemTypes = [
   "sunflower",
@@ -90,9 +97,47 @@ const itemSpeedLevels = [
   { name: "중간", min: 1.4, max: 1.9 },
   { name: "빠르게", min: 2.4, max: 3.2 },
 ];
+const allDecoyTypes = [...new Set(itemTypes)].filter(
+  (type) => type !== "sunflower",
+);
+
+const stages = {
+  1: {
+    song: "비발디 - 사계 중 여름",
+    title: "여름",
+    target: "sunflower",
+    targetChance: 4 / 14,
+    decoyTypes: ["snowflake", "snowman", "leaf", "star"],
+    dialogue: [
+      "만나서 반가워, 컨덕터.",
+      "나는 비발디의 사계 중 여름.",
+      "여름이라고 불러줘.",
+      "날 깨워줘서 고마워!",
+    ],
+    speeds: itemSpeedLevels,
+  },
+  2: {
+    song: "차이콥스키 - 백조의 호수",
+    title: "백조",
+    target: "swan",
+    targetChance: 3 / 14,
+    decoyTypes: allDecoyTypes.filter((type) => type !== "swan"),
+    dialogue: [
+      "…나를 깨운 건 너구나.",
+      "나는 차이콥스키의 백조의 호수.",
+      "백조라고 불러줘.",
+      "이 고요한 밤, 함께 건너가자.",
+    ],
+    speeds: [
+      { name: "느리게", min: 1.5, max: 2 },
+      { name: "중간", min: 2.2, max: 2.8 },
+      { name: "빠르게", min: 3.2, max: 4 },
+    ],
+  },
+};
 
 window.addEventListener("keydown", (event) => {
-  if (scene.gameOver) return;
+  if (scene.gameOver || scene.meeting) return;
   if (event.key === "ArrowLeft") {
     scene.keys.left = true;
     event.preventDefault();
@@ -109,22 +154,20 @@ window.addEventListener("keyup", (event) => {
 });
 
 window.addEventListener("click", (event) => {
-  if (!scene.gameOver) return;
-
   const bounds = canvas.getBoundingClientRect();
   const scaleX = canvas.width / bounds.width;
   const scaleY = canvas.height / bounds.height;
   const clickX = (event.clientX - bounds.left) * scaleX;
   const clickY = (event.clientY - bounds.top) * scaleY;
-  const button = getRestartButtonBounds();
-
-  if (
-    clickX >= button.x &&
-    clickX <= button.x + button.width &&
-    clickY >= button.y &&
-    clickY <= button.y + button.height
-  ) {
-    resetGame();
+  if (scene.meeting) {
+    const button = getMeetingButtonBounds();
+    if (isInsideButton(clickX, clickY, button)) {
+      if (scene.stage === 1) startStage(2);
+      else resetGame();
+    }
+  } else if (scene.gameOver) {
+    const button = getRestartButtonBounds();
+    if (isInsideButton(clickX, clickY, button)) resetGame();
   }
 });
 
@@ -135,8 +178,13 @@ window.addEventListener("blur", () => {
 
 // 아이템 하나의 종류, 위치, 낙하 속도를 각각 무작위로 정한다.
 function createRandomItem(y = Math.random() * scene.height) {
-  const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-  const speedLevel = itemSpeedLevels[Math.floor(Math.random() * itemSpeedLevels.length)];
+  const stage = stages[scene.stage];
+  const targetType = Math.random() < stage.targetChance;
+  const type = targetType
+    ? stage.target
+    : stage.decoyTypes[Math.floor(Math.random() * stage.decoyTypes.length)];
+  const speedLevels = stage.speeds;
+  const speedLevel = speedLevels[Math.floor(Math.random() * speedLevels.length)];
   const margin = scene.itemSize * 2;
 
   return {
@@ -145,7 +193,7 @@ function createRandomItem(y = Math.random() * scene.height) {
     y,
     speed: speedLevel.min + Math.random() * (speedLevel.max - speedLevel.min),
     speedLevel: speedLevel.name,
-    collectible: type === "sunflower",
+    collectible: type === stage.target,
   };
 }
 
@@ -166,18 +214,6 @@ function drawSky() {
   ctx.fillStyle = sky;
   // 캔버스 전체를 그라데이션으로 칠한다.
   ctx.fillRect(0, 0, scene.width, scene.height);
-
-  // 하늘에 있는 별 좌표를 순회해 그린다.
-  scene.stars.forEach(({ x, y, radius }) => {
-    // 별을 흰색 원으로 그리기 위해 채우기 색을 정한다.
-    ctx.fillStyle = "#ffffff";
-    // 새로운 도형 경로를 시작한다.
-    ctx.beginPath();
-    // (x, y)를 중심으로 radius 크기의 원을 만든다.
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    // 원 안쪽을 현재 색으로 칠한다.
-    ctx.fill();
-  });
 
   // 화면 오른쪽 위에서 숨 쉬듯 빛나는 여름 햇살을 그린다.
   const sunPulse = 1 + Math.sin(performance.now() / 450) * 0.07;
@@ -216,6 +252,75 @@ function drawSky() {
   // 하늘 전체를 차지하는 크고 층진 적란운 덩어리를 그린다.
   drawCumulonimbusSky();
   drawDriftingClouds();
+}
+
+// 백조의 호수 스테이지에 별빛과 불빛이 비치는 밤 호수를 그린다.
+function drawNightLake() {
+  const sky = ctx.createLinearGradient(0, 0, 0, scene.height);
+  sky.addColorStop(0, "#101b39");
+  sky.addColorStop(0.52, "#293d63");
+  sky.addColorStop(1, "#52627a");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  scene.stars.forEach(({ x, y, radius }) => {
+    ctx.fillStyle = "rgb(255 246 218 / 82%)";
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = "#f4e9c5";
+  ctx.beginPath();
+  ctx.arc(650, 96, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1a2948";
+  ctx.beginPath();
+  ctx.arc(665, 83, 31, 0, Math.PI * 2);
+  ctx.fill();
+
+  const lake = ctx.createLinearGradient(0, 255, 0, 485);
+  lake.addColorStop(0, "#344c70");
+  lake.addColorStop(1, "#17263e");
+  ctx.fillStyle = lake;
+  ctx.fillRect(0, 255, scene.width, 230);
+
+  ctx.save();
+  ctx.globalAlpha = 0.78;
+  for (let reflection = 0; reflection < 29; reflection += 1) {
+    const y = 282 + reflection * 6.1;
+    const width = 13 + Math.sin(performance.now() / 220 + reflection) * 7;
+    const x = 398 + Math.sin(reflection * 2.3) * (18 + reflection * 1.2);
+    ctx.strokeStyle = reflection % 3 === 0 ? "#ffc16b" : "#f08c54";
+    ctx.lineWidth = 2 + (reflection % 3);
+    ctx.beginPath();
+    ctx.moveTo(x - width, y);
+    ctx.quadraticCurveTo(x, y + Math.sin(performance.now() / 280 + reflection) * 3, x + width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.fillStyle = "#302a2b";
+  ctx.beginPath();
+  ctx.moveTo(0, 442);
+  ctx.quadraticCurveTo(150, 425, 300, 447);
+  ctx.quadraticCurveTo(470, 463, 620, 438);
+  ctx.quadraticCurveTo(720, 425, scene.width, 444);
+  ctx.lineTo(scene.width, scene.height);
+  ctx.lineTo(0, scene.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgb(194 205 198 / 45%)";
+  ctx.lineWidth = 2;
+  for (let glint = 0; glint < 24; glint += 1) {
+    const x = (glint * 53 + 17) % scene.width;
+    const y = 466 + (glint * 19) % 118;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 10 + (glint % 5) * 3, y - 2);
+    ctx.stroke();
+  }
 }
 
 // 작은 구름들이 서로 다른 속도로 하늘을 지나가게 한다.
@@ -677,22 +782,45 @@ function drawItem(item) {
 function drawConductor() {
   // 설정 목록에서 지휘자 위치와 확대·축소 배율을 꺼낸다.
   const { x, y, scale } = scene.conductor;
+  const isWalking =
+    scene.keys.left !== scene.keys.right && !scene.gameOver && !scene.meeting;
+  const direction = scene.keys.right ? 1 : -1;
+  const stride = isWalking ? Math.sin(performance.now() / 90) * direction : 0;
   // 지휘자만 따로 이동·축소할 수 있도록 현재 설정을 저장한다.
   ctx.save();
   // 이후 지휘자 도형들이 그려질 중심점을 이동한다.
   ctx.translate(x, y);
   // 지휘자 도형 전체의 크기를 배율만큼 조정한다.
   ctx.scale(scale, scale);
+  // 이동 방향으로 몸 전체를 좌우 반전해 바라보게 한다.
+  ctx.scale(scene.conductor.facing, 1);
 
-  // 사람의 다리와 신발
-  // 검은 바지의 왼쪽 다리와 오른쪽 다리를 사각형으로 그린다.
-  ctx.fillStyle = "#202a40";
-  ctx.fillRect(-25, 88, 18, 39);
-  ctx.fillRect(7, 88, 18, 39);
-  // 두 발에 검은색 신발을 그린다.
-  ctx.fillStyle = "#20202a";
-  ctx.fillRect(-30, 122, 26, 9);
-  ctx.fillRect(4, 122, 26, 9);
+  // 걷는 중에는 양쪽 다리의 무릎과 발을 번갈아 움직인다.
+  [-1, 1].forEach((side) => {
+    const legSwing = stride * side;
+    const hipAngle = legSwing * 0.48;
+    const kneeAngle = isWalking ? Math.max(0, -legSwing) * 0.75 : 0;
+    const hipX = side * 15;
+    const kneeX = hipX + Math.sin(hipAngle) * 21;
+    const kneeY = 88 + Math.cos(hipAngle) * 21;
+    const lowerAngle = hipAngle + kneeAngle;
+    const ankleX = kneeX + Math.sin(lowerAngle) * 19;
+    const ankleY = kneeY + Math.cos(lowerAngle) * 19;
+
+    ctx.strokeStyle = "#202a40";
+    ctx.lineWidth = 15;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(hipX, 88);
+    ctx.lineTo(kneeX, kneeY);
+    ctx.lineTo(ankleX, ankleY);
+    ctx.stroke();
+
+    ctx.fillStyle = "#20202a";
+    ctx.beginPath();
+    ctx.ellipse(ankleX + 5, ankleY + 2, 13, 4.5, lowerAngle * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+  });
 
   // 연미복 몸통과 흰 셔츠
   // 연미복의 몸통 외곽선을 그린다.
@@ -719,32 +847,40 @@ function drawConductor() {
   // 셔츠를 흰색으로 채운다.
   ctx.fill();
 
-  // 얼굴, 머리카락, 눈과 미소
-  // 피부색 원으로 얼굴을 그린다.
+  // 오른쪽을 향한 얼굴 옆모습을 그린다. 몸 반전으로 왼쪽도 표현한다.
   ctx.fillStyle = "#f2c7a5";
   ctx.beginPath();
-  ctx.arc(0, -8, 24, 0, Math.PI * 2);
-  ctx.fill();
-  // 머리 위쪽의 갈색 머리카락 모양을 그린다.
-  ctx.fillStyle = "#49372f";
-  ctx.beginPath();
-  ctx.arc(0, -15, 24, Math.PI, Math.PI * 2);
-  ctx.lineTo(21, -4);
-  ctx.quadraticCurveTo(11, -14, 0, -12);
-  ctx.quadraticCurveTo(-13, -9, -21, -2);
+  ctx.moveTo(-20, -23);
+  ctx.quadraticCurveTo(-13, -34, 4, -31);
+  ctx.quadraticCurveTo(20, -27, 21, -14);
+  ctx.lineTo(29, -7);
+  ctx.quadraticCurveTo(30, -3, 21, 0);
+  ctx.quadraticCurveTo(20, 13, 10, 16);
+  ctx.quadraticCurveTo(-7, 19, -20, 7);
   ctx.closePath();
   ctx.fill();
-  // 얼굴에 작은 두 눈을 그린다.
+  // 뒤쪽 머리와 앞머리 윤곽을 만든다.
+  ctx.fillStyle = "#49372f";
+  ctx.beginPath();
+  ctx.moveTo(-22, 8);
+  ctx.lineTo(-23, -18);
+  ctx.quadraticCurveTo(-16, -39, 5, -34);
+  ctx.quadraticCurveTo(20, -30, 22, -15);
+  ctx.quadraticCurveTo(11, -21, 4, -15);
+  ctx.quadraticCurveTo(-4, -9, -13, -13);
+  ctx.lineTo(-18, 1);
+  ctx.closePath();
+  ctx.fill();
+  // 진행 방향 쪽 눈 하나와 옆얼굴의 입선을 그린다.
   ctx.fillStyle = "#303044";
   ctx.beginPath();
-  ctx.arc(-8, -6, 2, 0, Math.PI * 2);
-  ctx.arc(8, -6, 2, 0, Math.PI * 2);
+  ctx.arc(11, -12, 2, 0, Math.PI * 2);
   ctx.fill();
-  // 얼굴 아래에 미소 곡선을 그린다.
   ctx.strokeStyle = "#9a5960";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 1, 6, 0.2, Math.PI - 0.2);
+  ctx.moveTo(15, 6);
+  ctx.lineTo(21, 5);
   ctx.stroke();
 
   // 양팔을 벌려 지휘하는 자세와 오른손의 지휘봉
@@ -805,6 +941,7 @@ function drawConductor() {
 function drawHud() {
   // 상단 UI 칸들의 좌표와 크기를 설정에서 꺼낸다.
   const { song, stage, lives } = scene.hud;
+  const stageInfo = stages[scene.stage];
 
   // 스테이지 표시 칸의 배경색과 둥근 모서리를 정한다.
   ctx.fillStyle = colors.panel;
@@ -818,7 +955,7 @@ function drawHud() {
   ctx.textAlign = "center";
   ctx.font = "bold 16px Arial, sans-serif";
   // 스테이지 칸의 가운데에 제목을 쓴다.
-  ctx.fillText("STAGE 1", stage.x + stage.width / 2, stage.y + 22);
+  ctx.fillText(`STAGE ${scene.stage}`, stage.x + stage.width / 2, stage.y + 22);
   // 이후 글자는 왼쪽 정렬로 쓴다.
   ctx.textAlign = "start";
 
@@ -837,8 +974,8 @@ function drawHud() {
   ctx.fillRect(song.x + 21, song.y + 2, 2, 26);
   ctx.fillRect(song.x + 22, song.y + 2, 13, 3);
   // 음표 옆에 작곡가 이름과 현재 곡 제목을 쓴다.
-  ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("비발디 - 사계 중 여름", song.x + 43, song.y + 29);
+  ctx.font = "13px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText(stageInfo.song, song.x + 43, song.y + 29);
 
   // 오른쪽 위에 라이프를 표시하는 배경 칸을 그린다.
   ctx.fillStyle = colors.panel;
@@ -919,18 +1056,26 @@ function drawLegend() {
   ctx.textAlign = "center";
   // 배경 칸 위쪽에 "목표 아이템"이라고 쓴다.
   ctx.fillText("목표 아이템", x + width / 2, y + 23);
-  // 제목 바로 아래에 수집 대상인 해바라기 아이콘을 그린다.
-  drawSunflowerIcon(x + width / 2, y + 56, scene.itemSize * 0.65);
+  // 제목 바로 아래에 현재 스테이지의 목표 아이콘을 그린다.
+  if (stages[scene.stage].target === "swan") {
+    drawSwanIcon(x + width / 2, y + 56, scene.itemSize * 0.9);
+  } else {
+    drawSunflowerIcon(x + width / 2, y + 56, scene.itemSize * 0.65);
+  }
   // 다음 Canvas 텍스트를 왼쪽 정렬로 되돌린다.
   ctx.textAlign = "start";
 }
 
 // 배경, 아이템, 지휘자와 지휘자 아래의 게이지를 차례로 그린다.
 function drawFirstScreen() {
-  // 가장 뒤쪽인 하늘과 햇살, 구름을 먼저 그린다.
-  drawSky();
-  // 하늘 앞에 언덕과 잔디밭을 그린다.
-  drawLandscape();
+  if (scene.stage === 2) {
+    drawNightLake();
+  } else {
+    // 가장 뒤쪽인 하늘과 햇살, 구름을 먼저 그린다.
+    drawSky();
+    // 하늘 앞에 언덕과 잔디밭을 그린다.
+    drawLandscape();
+  }
   // 설정에 등록된 해바라기와 방해 아이템을 모두 그린다.
   scene.items.forEach(drawItem);
   // 아이템 앞쪽에 지휘자를 그린다.
@@ -942,11 +1087,15 @@ function drawFirstScreen() {
   // 지휘자 바로 아래에 현재 게이지를 그린다.
   drawGauge();
   if (scene.gameOver) drawGameOver();
+  else if (scene.meeting) drawMusicaMeeting();
   else if (performance.now() < scene.itemsStartAt) drawStartNotice();
 }
 
 // 지휘자를 방향키로 움직이고, 캔버스 가장자리 안에 머물게 한다.
 function updateConductor() {
+  if (scene.keys.left !== scene.keys.right) {
+    scene.conductor.facing = scene.keys.right ? 1 : -1;
+  }
   if (scene.keys.left) scene.conductor.x -= scene.conductor.speed;
   if (scene.keys.right) scene.conductor.x += scene.conductor.speed;
 
@@ -957,16 +1106,10 @@ function updateConductor() {
   );
 }
 
-// 사용한 아이템을 새 무작위 아이템으로 바꾸어 화면 위쪽에서 다시 떨어뜨린다.
-function resetItem(item) {
-  Object.assign(
-    item,
-    createRandomItem(-Math.random() * scene.height - scene.itemSize * 2),
-  );
-}
-
-// 게임 오버 뒤 다시 시작할 수 있도록 플레이 상태와 아이템을 초기화한다.
-function resetGame() {
+// 다음 스테이지의 곡과 목표 아이템에 맞춰 게임을 준비한다.
+function startStage(stage) {
+  scene.stage = stage;
+  scene.meeting = false;
   scene.gameOver = false;
   scene.hud.lives.count = 3;
   scene.gauge.percent = 0;
@@ -982,9 +1125,23 @@ function resetGame() {
   });
 }
 
+// 사용한 아이템을 새 무작위 아이템으로 바꾸어 화면 위쪽에서 다시 떨어뜨린다.
+function resetItem(item) {
+  Object.assign(
+    item,
+    createRandomItem(-Math.random() * scene.height - scene.itemSize * 2),
+  );
+}
+
+// 게임 오버 뒤 다시 시작할 수 있도록 플레이 상태와 아이템을 초기화한다.
+function resetGame() {
+  startStage(1);
+}
+
 // 아이템마다 따로 떨어뜨리고, 잔디에 닿거나 지휘자와 부딪히면 처리한다.
 function updateItems() {
   scene.items.forEach((item) => {
+    if (scene.gameOver || scene.meeting) return;
     item.y += item.speed;
 
     const itemRadius = scene.itemSize * 1.5;
@@ -1010,6 +1167,7 @@ function updateItems() {
           100,
           scene.gauge.percent + scene.gauge.gainPerItem,
         );
+        if (scene.gauge.percent === 100) scene.meeting = true;
       } else {
         scene.hud.lives.count = Math.max(0, scene.hud.lives.count - 1);
         scene.gameOver = scene.hud.lives.count === 0;
@@ -1049,6 +1207,159 @@ function getRestartButtonBounds() {
   return { x: scene.width / 2 - 90, y: scene.height / 2 + 58, width: 180, height: 52 };
 }
 
+function getMeetingButtonBounds() {
+  return { x: scene.width / 2 - 140, y: 492, width: 280, height: 54 };
+}
+
+function isInsideButton(x, y, button) {
+  return (
+    x >= button.x &&
+    x <= button.x + button.width &&
+    y >= button.y &&
+    y <= button.y + button.height
+  );
+}
+
+// 스테이지 클리어 뒤 곡의 성격에 맞는 무지카와 대사를 보여 준다.
+function drawMusicaMeeting() {
+  const stageInfo = stages[scene.stage];
+  ctx.fillStyle = "rgb(9 17 34 / 78%)";
+  ctx.fillRect(0, 0, scene.width, scene.height);
+
+  ctx.fillStyle = scene.stage === 1 ? "#fff3cf" : "#e4efff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 30px Arial, sans-serif";
+  ctx.fillText("MUSICA CATCH!", scene.width / 2, 103);
+  ctx.font = "15px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText(stageInfo.song, scene.width / 2, 135);
+
+  ctx.fillStyle = "rgb(255 255 255 / 13%)";
+  ctx.beginPath();
+  ctx.roundRect(72, 174, 424, 248, 16);
+  ctx.fill();
+  ctx.fillStyle = colors.text;
+  ctx.textAlign = "left";
+  ctx.font = "bold 23px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText(stageInfo.title, 104, 221);
+  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+  stageInfo.dialogue.forEach((line, index) => {
+    ctx.fillText(line, 104, 267 + index * 36);
+  });
+
+  drawMusicaCharacter(scene.stage);
+  ctx.fillStyle = scene.stage === 1 ? "#ffe39b" : "#dce9ff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText(stageInfo.title, 634, 465);
+
+  const button = getMeetingButtonBounds();
+  ctx.fillStyle = scene.stage === 1 ? "#ffd447" : "#d9e7ff";
+  ctx.beginPath();
+  ctx.roundRect(button.x, button.y, button.width, button.height, 12);
+  ctx.fill();
+  ctx.fillStyle = "#26364a";
+  ctx.font = "bold 17px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText(
+    scene.stage === 1 ? "다음 무지카를 만나러 가기" : "처음으로 돌아가기",
+    button.x + button.width / 2,
+    button.y + 34,
+  );
+  ctx.textAlign = "start";
+}
+
+// 여름은 햇살빛 의상으로, 백조는 깃털 장식으로 무지카를 표현한다.
+function drawMusicaCharacter(stage) {
+  const isSwan = stage === 2;
+  ctx.save();
+  ctx.translate(634, 349);
+  ctx.scale(0.9, 0.9);
+
+  if (isSwan) {
+    ctx.fillStyle = "#f3f6ff";
+    ctx.beginPath();
+    ctx.ellipse(-46, 3, 42, 18, -0.5, 0, Math.PI * 2);
+    ctx.ellipse(46, 3, 42, 18, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#c8d8f3";
+    ctx.lineWidth = 3;
+    for (let feather = 0; feather < 4; feather += 1) {
+      ctx.beginPath();
+      ctx.moveTo(-74 + feather * 8, 2 + feather * 2);
+      ctx.quadraticCurveTo(-55, 17 + feather * 2, -34, 20);
+      ctx.moveTo(74 - feather * 8, 2 + feather * 2);
+      ctx.quadraticCurveTo(55, 17 + feather * 2, 34, 20);
+      ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = "#f2a64a";
+    ctx.beginPath();
+    ctx.ellipse(-42, 13, 30, 55, -0.25, 0, Math.PI * 2);
+    ctx.ellipse(42, 13, 30, 55, 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = isSwan ? "#e8eefc" : "#e98d62";
+  ctx.beginPath();
+  ctx.moveTo(-42, 5);
+  ctx.quadraticCurveTo(-58, 60, -74, 124);
+  ctx.quadraticCurveTo(0, 145, 74, 124);
+  ctx.quadraticCurveTo(58, 60, 42, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#f0c7a8";
+  ctx.beginPath();
+  ctx.arc(0, -48, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = isSwan ? "#18243d" : "#7c3c28";
+  ctx.beginPath();
+  ctx.arc(0, -60, 35, Math.PI, Math.PI * 2);
+  ctx.lineTo(32, -40);
+  ctx.quadraticCurveTo(20, -50, 0, -44);
+  ctx.quadraticCurveTo(-20, -50, -32, -40);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#29334b";
+  ctx.beginPath();
+  ctx.arc(-11, -47, 2.5, 0, Math.PI * 2);
+  ctx.arc(11, -47, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#a85c5b";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, -39, 7, 0.2, Math.PI - 0.2);
+  ctx.stroke();
+
+  if (isSwan) {
+    ctx.fillStyle = "#f5f0d7";
+    ctx.beginPath();
+    ctx.ellipse(0, -87, 30, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#e9c866";
+    ctx.beginPath();
+    ctx.moveTo(-13, -88);
+    ctx.lineTo(-8, -103);
+    ctx.lineTo(0, -91);
+    ctx.lineTo(8, -103);
+    ctx.lineTo(13, -88);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.fillStyle = "#ffd447";
+    ctx.beginPath();
+    ctx.arc(0, -88, 11, 0, Math.PI * 2);
+    ctx.fill();
+    for (let petal = 0; petal < 8; petal += 1) {
+      const angle = (petal * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * 13, -88 + Math.sin(angle) * 13, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function drawStartNotice() {
   ctx.fillStyle = colors.panel;
   ctx.beginPath();
@@ -1067,7 +1378,7 @@ function gameLoop() {
   ctx.clearRect(0, 0, scene.width, scene.height);
   updateClouds();
 
-  if (!scene.gameOver) {
+  if (!scene.gameOver && !scene.meeting) {
     // 지휘자를 움직이고, 준비 시간이 지난 뒤 아이템을 떨어뜨린다.
     updateConductor();
     if (performance.now() >= scene.itemsStartAt) updateItems();
