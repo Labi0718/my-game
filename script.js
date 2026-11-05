@@ -16,6 +16,10 @@ const scene = {
   nextShootingStarAt: performance.now() + 700, // 다음 별똥별이 나타날 시각
   itemSize: 20, // 떨어지는 모든 아이템의 기준 크기
   items: [], // 각각 위치와 속도가 다른 낙하 아이템
+  rainbowBubbles: [], // 스테이지 4부터 제한된 횟수만 등장하는 무적 아이템
+  rainbowBubblesSpawned: 0, // 이번 스테이지에서 등장한 무지개 방울 수
+  nextRainbowBubbleAt: Infinity, // 다음 무지개 방울이 등장할 시각
+  invincibleUntil: 0, // 무적 효과가 끝나는 시각
   conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
   screen: "home", // 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
@@ -109,6 +113,9 @@ const allDecoyTypes = [...new Set(itemTypes)].filter(
 );
 const itemLaneCount = 14;
 const activeItemLanes = [0, 2, 4, 6, 8, 10, 12];
+const rainbowBubbleLimit = 2;
+const rainbowBubbleInterval = 18000;
+const rainbowColors = ["#ff4d6d", "#ff9f1c", "#ffe34d", "#4bd37b", "#37b9ff", "#9d70ff"];
 
 const stages = {
   1: {
@@ -1524,6 +1531,10 @@ function drawWalnutIcon(x, y, size) {
 function drawItem(item) {
   // 아이템 설정에서 위치와 아이콘 종류를 꺼낸다.
   const { x, y, type } = item;
+  if (type === "rainbowBubble") {
+    drawRainbowBubble(x, y, scene.itemSize * 1.25);
+    return;
+  }
   // 각 아이콘은 같은 기준 크기에서 그리기 시작한다.
   const size = scene.itemSize;
   // 작은 모양의 방해 아이콘은 해바라기와 비슷하게 보이도록 확대한다.
@@ -1561,6 +1572,41 @@ function drawItem(item) {
   if (type === "walnut") drawWalnutIcon(x, y, iconSize);
 }
 
+// 빛나는 무지개 방울을 그린다.
+function drawRainbowBubble(x, y, size) {
+  const pulse = 1 + Math.sin(performance.now() / 120) * 0.08;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = "#ff8df5";
+  ctx.shadowBlur = 12 + pulse * 8;
+  ctx.fillStyle = "rgb(214 250 255 / 62%)";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.72);
+  ctx.bezierCurveTo(size * 0.2, -size * 0.45, size * 0.58, -size * 0.05, size * 0.5, size * 0.28);
+  ctx.bezierCurveTo(size * 0.42, size * 0.82, -size * 0.42, size * 0.82, -size * 0.5, size * 0.28);
+  ctx.bezierCurveTo(-size * 0.58, -size * 0.05, -size * 0.2, -size * 0.45, 0, -size * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.clip();
+  ctx.shadowBlur = 0;
+  rainbowColors.forEach((color, index) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(0, size * 0.38, size * (0.48 - index * 0.065), Math.PI, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.fillStyle = "rgb(255 255 255 / 88%)";
+  ctx.beginPath();
+  ctx.ellipse(-size * 0.18, -size * 0.2, size * 0.09, size * 0.17, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 // 지휘봉과 연미복을 갖춘 사람 모습의 지휘자를 그린다.
 function drawConductor() {
   // 설정 목록에서 지휘자 위치와 확대·축소 배율을 꺼낸다.
@@ -1577,6 +1623,29 @@ function drawConductor() {
   ctx.scale(scale, scale);
   // 이동 방향으로 몸 전체를 좌우 반전해 바라보게 한다.
   ctx.scale(scene.conductor.facing, 1);
+
+  if (performance.now() < scene.invincibleUntil) {
+    const pulse = 1 + Math.sin(performance.now() / 100) * 0.06;
+    const glow = ctx.createRadialGradient(0, 42, 18, 0, 42, 118 * pulse);
+    glow.addColorStop(0, "rgb(255 255 255 / 4%)");
+    glow.addColorStop(0.58, "rgb(110 220 255 / 20%)");
+    glow.addColorStop(1, "rgb(255 255 255 / 0%)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(0, 42, 92 * pulse, 128 * pulse, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = "#ff8df5";
+    ctx.shadowBlur = 16;
+    rainbowColors.forEach((color, index) => {
+      const segment = (Math.PI * 2) / rainbowColors.length;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(0, 42, 99 * pulse, index * segment, (index + 0.82) * segment);
+      ctx.stroke();
+    });
+    ctx.shadowBlur = 0;
+  }
 
   // 걷는 중에는 양쪽 다리의 무릎과 발을 번갈아 움직인다.
   [-1, 1].forEach((side) => {
@@ -1769,6 +1838,19 @@ function drawHud() {
   for (let heart = 0; heart < lives.count; heart += 1) {
     drawHeart(lives.x + 34 + heart * 43, lives.y + 21, 15);
   }
+
+  const invincibilityRemaining = (scene.invincibleUntil - performance.now()) / 1000;
+  if (invincibilityRemaining > 0) {
+    ctx.fillStyle = "rgb(25 91 130 / 92%)";
+    ctx.beginPath();
+    ctx.roundRect(lives.x, lives.y + 51, lives.width, 27, 7);
+    ctx.fill();
+    ctx.fillStyle = "#fff3cf";
+    ctx.textAlign = "center";
+    ctx.font = "bold 13px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText(`무적 ${invincibilityRemaining.toFixed(1)}초`, lives.x + lives.width / 2, lives.y + 70);
+    ctx.textAlign = "start";
+  }
 }
 
 // 지정한 중심 좌표에 라이프를 나타내는 하트 하나를 그린다.
@@ -1865,6 +1947,7 @@ function drawFirstScreen() {
   else drawFlowerField();
   // 설정에 등록된 해바라기와 방해 아이템을 모두 그린다.
   scene.items.forEach(drawItem);
+  scene.rainbowBubbles.forEach(drawItem);
   // 아이템 앞쪽에 지휘자를 그린다.
   drawConductor();
   // 곡 제목, 스테이지 이름과 남은 라이프를 그린다.
@@ -1900,10 +1983,15 @@ function startStage(stage) {
   scene.screen = "playing";
   scene.meeting = false;
   scene.gameOver = false;
+  scene.invincibleUntil = 0;
+  scene.rainbowBubbles = [];
+  scene.rainbowBubblesSpawned = 0;
   scene.hud.lives.count = 3;
   scene.gauge.percent = 0;
   scene.conductor.x = scene.width / 2;
   scene.itemsStartAt = performance.now() + 2000;
+  scene.nextRainbowBubbleAt =
+    stage >= 4 ? scene.itemsStartAt + 7000 : Infinity;
   scene.shootingStars = [];
   scene.nextShootingStarAt = performance.now() + 500;
   scene.keys.left = false;
@@ -1937,6 +2025,40 @@ function resetGame() {
 
 // 아이템마다 따로 떨어뜨리고, 잔디에 닿거나 지휘자와 부딪히면 처리한다.
 function updateItems() {
+  const now = performance.now();
+  if (
+    scene.stage >= 4 &&
+    scene.rainbowBubblesSpawned < rainbowBubbleLimit &&
+    now >= scene.nextRainbowBubbleAt
+  ) {
+    const lane = Math.floor(Math.random() * itemLaneCount);
+    const margin = scene.itemSize * 2;
+    const laneWidth = (scene.width - margin * 2) / itemLaneCount;
+    scene.rainbowBubbles.push({
+      type: "rainbowBubble",
+      x: margin + laneWidth * (lane + 0.5),
+      y: -scene.itemSize * 2,
+      speed: 2.8 + Math.random() * 0.8,
+    });
+    scene.rainbowBubblesSpawned += 1;
+    scene.nextRainbowBubbleAt =
+      scene.rainbowBubblesSpawned < rainbowBubbleLimit
+        ? now + rainbowBubbleInterval
+        : Infinity;
+  }
+
+  for (let index = scene.rainbowBubbles.length - 1; index >= 0; index -= 1) {
+    const bubble = scene.rainbowBubbles[index];
+    bubble.y += bubble.speed;
+    const touchesConductor = itemTouchesConductor(bubble, scene.itemSize * 0.8);
+    if (touchesConductor) {
+      scene.invincibleUntil = performance.now() + 5000;
+      scene.rainbowBubbles.splice(index, 1);
+    } else if (bubble.y > scene.height + scene.itemSize * 2) {
+      scene.rainbowBubbles.splice(index, 1);
+    }
+  }
+
   scene.items.forEach((item) => {
     if (scene.gameOver || scene.meeting) return;
     item.y += item.speed;
@@ -1948,16 +2070,7 @@ function updateItems() {
       return;
     }
 
-    const conductor = scene.conductor;
-    const hitRadius = scene.itemSize * 0.55;
-    const conductorHalfWidth = 30 * conductor.scale;
-    const conductorTop = conductor.y - 35 * conductor.scale;
-    const conductorBottom = conductor.y + 120 * conductor.scale;
-    const touchesConductor =
-      item.x + hitRadius >= conductor.x - conductorHalfWidth &&
-      item.x - hitRadius <= conductor.x + conductorHalfWidth &&
-      item.y + hitRadius >= conductorTop &&
-      item.y - hitRadius <= conductorBottom;
+    const touchesConductor = itemTouchesConductor(item, scene.itemSize * 0.55);
 
     if (touchesConductor) {
       if (item.collectible) {
@@ -1966,7 +2079,7 @@ function updateItems() {
           scene.gauge.percent + scene.gauge.gainPerItem,
         );
         if (scene.gauge.percent === 100) scene.meeting = true;
-      } else {
+      } else if (performance.now() >= scene.invincibleUntil) {
         scene.hud.lives.count = Math.max(0, scene.hud.lives.count - 1);
         scene.gameOver = scene.hud.lives.count === 0;
       }
@@ -1978,6 +2091,19 @@ function updateItems() {
       resetItem(item);
     }
   });
+}
+
+function itemTouchesConductor(item, hitRadius) {
+  const conductor = scene.conductor;
+  const conductorHalfWidth = 30 * conductor.scale;
+  const conductorTop = conductor.y - 35 * conductor.scale;
+  const conductorBottom = conductor.y + 120 * conductor.scale;
+  return (
+    item.x + hitRadius >= conductor.x - conductorHalfWidth &&
+    item.x - hitRadius <= conductor.x + conductorHalfWidth &&
+    item.y + hitRadius >= conductorTop &&
+    item.y - hitRadius <= conductorBottom
+  );
 }
 
 // 라이프를 모두 잃었을 때 화면 중앙에 종료 안내를 보여 준다.
@@ -2210,6 +2336,8 @@ function drawControlsScreen() {
   ctx.fillText("→  오른쪽으로 이동", scene.width / 2, 270);
   ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 335);
   ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 377);
+  ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 5초간 무적!", scene.width / 2, 415);
   drawMenuButton(getPauseButtonBounds("controlsBack"), "설정으로");
   ctx.textAlign = "start";
 }
