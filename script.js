@@ -136,7 +136,7 @@ const stages = {
     song: "차이콥스키 - 백조의 호수",
     title: "백조",
     target: "swan",
-    targetChance: 3 / 14,
+    targetChance: 5 / 14,
     decoyTypes: allDecoyTypes.filter((type) => type !== "swan"),
     dialogue: [
       "…나를 깨운 건 너구나.",
@@ -154,7 +154,7 @@ const stages = {
     song: "모차르트 - 작은 별 변주곡",
     title: "별",
     target: "star",
-    targetChance: 2 / 14,
+    targetChance: 4 / 14,
     decoyTypes: allDecoyTypes.filter((type) => type !== "star"),
     dialogue: [
       "우와, 드디어 만났다!",
@@ -172,7 +172,7 @@ const stages = {
     song: "엘가 - 위풍당당 행진곡",
     title: "위풍당당",
     target: "crown",
-    targetChance: 1 / 14,
+    targetChance: 3 / 14,
     decoyTypes: allDecoyTypes,
     dialogue: [
       "흥, 내가 올 줄 알았지?",
@@ -190,7 +190,7 @@ const stages = {
     song: "베토벤 - 교향곡 5번 운명",
     title: "운명",
     target: "redYarn",
-    targetChance: 1 / 18,
+    targetChance: 2 / 14,
     decoyTypes: allDecoyTypes.filter((type) => type !== "redYarn"),
     dialogue: [
       "마침내 만났네, 나의 운명.",
@@ -208,7 +208,7 @@ const stages = {
     song: "쇼팽 - 환상 즉흥곡",
     title: "환상 즉흥곡",
     target: "flower",
-    targetChance: 1 / 10,
+    targetChance: 2 / 10,
     decoyTypes: allDecoyTypes.filter((type) => type !== "flower"),
     dialogue: [
       "꽃향기를 따라 여기까지 왔구나!",
