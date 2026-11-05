@@ -20,6 +20,7 @@ const scene = {
   rainbowBubblesSpawned: 0, // 이번 스테이지에서 등장한 무지개 방울 수
   nextRainbowBubbleAt: Infinity, // 다음 무지개 방울이 등장할 시각
   invincibleUntil: 0, // 무적 효과가 끝나는 시각
+  pendingStage: null, // 안내 화면을 확인한 뒤 시작할 스테이지
   conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
   screen: "home", // 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
@@ -113,8 +114,12 @@ const allDecoyTypes = [...new Set(itemTypes)].filter(
 );
 const itemLaneCount = 14;
 const activeItemLanes = [0, 2, 4, 6, 8, 10, 12];
-const rainbowBubbleLimit = 2;
-const rainbowBubbleInterval = 18000;
+const rainbowBubbleSettings = {
+  4: { count: 2, interval: 18000 },
+  5: { count: 3, interval: 15000 },
+  6: { count: 4, interval: 12000 },
+};
+const invincibilityDuration = 10000;
 const rainbowColors = ["#ff4d6d", "#ff9f1c", "#ffe34d", "#4bd37b", "#37b9ff", "#9d70ff"];
 
 const stages = {
@@ -267,11 +272,19 @@ window.addEventListener("click", (event) => {
   if (scene.screen === "levels") {
     for (let stage = 1; stage <= 10; stage += 1) {
       if (stage <= 6 && isInsideButton(x, y, getLevelCardBounds(stage))) {
-        startStage(stage);
+        prepareStage(stage);
         return;
       }
     }
     if (isInsideButton(x, y, getLevelHomeButtonBounds())) scene.screen = "home";
+    return;
+  }
+  if (scene.screen === "stageIntro") {
+    if (isInsideButton(x, y, getStageIntroButtonBounds())) {
+      const stage = scene.pendingStage;
+      scene.pendingStage = null;
+      startStage(stage);
+    }
     return;
   }
   if (scene.screen === "pause") {
@@ -295,7 +308,7 @@ window.addEventListener("click", (event) => {
   if (scene.meeting) {
     const button = getMeetingButtonBounds();
     if (isInsideButton(x, y, button)) {
-      if (scene.stage < 6) startStage(scene.stage + 1);
+      if (scene.stage < 6) prepareStage(scene.stage + 1);
       else scene.screen = "levels";
     }
   } else if (scene.gameOver) {
@@ -1961,6 +1974,46 @@ function drawFirstScreen() {
   else if (performance.now() < scene.itemsStartAt) drawStartNotice();
 }
 
+function prepareStage(stage) {
+  if (stage === 4) {
+    scene.pendingStage = stage;
+    scene.screen = "stageIntro";
+    scene.keys.left = false;
+    scene.keys.right = false;
+    return;
+  }
+  startStage(stage);
+}
+
+function getStageIntroButtonBounds() {
+  return { x: scene.width / 2 - 115, y: 430, width: 230, height: 56 };
+}
+
+function drawStageIntro() {
+  drawMenuBackdrop();
+  ctx.fillStyle = "rgb(9 17 34 / 72%)";
+  ctx.fillRect(0, 0, scene.width, scene.height);
+  ctx.fillStyle = "rgb(255 255 255 / 13%)";
+  ctx.beginPath();
+  ctx.roundRect(145, 75, 510, 460, 20);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff3cf";
+  ctx.textAlign = "center";
+  ctx.font = "bold 30px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("새로운 아이템 등장!", scene.width / 2, 125);
+  ctx.fillText("무지개 방울", scene.width / 2, 174);
+  drawRainbowBubble(scene.width / 2, 260, 48);
+
+  ctx.fillStyle = colors.text;
+  ctx.font = "17px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("무지개 방울을 먹으면 10초 동안 무적이 됩니다.", scene.width / 2, 345);
+  ctx.fillText("무적일 때는 방해 아이템에 닿아도 라이프가 줄지 않아요.", scene.width / 2, 378);
+  ctx.fillText("지휘자 주변의 무지개빛 오라로 남은 시간을 확인하세요.", scene.width / 2, 411);
+  drawMenuButton(getStageIntroButtonBounds(), "스테이지 4 시작");
+  ctx.textAlign = "start";
+}
+
 // 지휘자를 방향키로 움직이고, 캔버스 가장자리 안에 머물게 한다.
 function updateConductor() {
   if (scene.keys.left !== scene.keys.right) {
@@ -1990,21 +2043,19 @@ function startStage(stage) {
   scene.gauge.percent = 0;
   scene.conductor.x = scene.width / 2;
   scene.itemsStartAt = performance.now() + 2000;
-  scene.nextRainbowBubbleAt =
-    stage >= 4 ? scene.itemsStartAt + 7000 : Infinity;
+  scene.nextRainbowBubbleAt = rainbowBubbleSettings[stage]
+    ? scene.itemsStartAt + 7000
+    : Infinity;
   scene.shootingStars = [];
   scene.nextShootingStarAt = performance.now() + 500;
   scene.keys.left = false;
   scene.keys.right = false;
-  scene.items.forEach((item) => {
-    Object.assign(
-      item,
-      createRandomItem(
-        -Math.random() * (scene.height + scene.itemSize * 2),
-        item.lane,
-      ),
-    );
-  });
+  scene.items = activeItemLanes.map((lane) =>
+    createRandomItem(
+      -Math.random() * (scene.height + scene.itemSize * 2),
+      lane,
+    ),
+  );
 }
 
 // 사용한 아이템을 새 무작위 아이템으로 바꾸어 화면 위쪽에서 다시 떨어뜨린다.
@@ -2026,9 +2077,10 @@ function resetGame() {
 // 아이템마다 따로 떨어뜨리고, 잔디에 닿거나 지휘자와 부딪히면 처리한다.
 function updateItems() {
   const now = performance.now();
+  const bubbleSettings = rainbowBubbleSettings[scene.stage];
   if (
-    scene.stage >= 4 &&
-    scene.rainbowBubblesSpawned < rainbowBubbleLimit &&
+    bubbleSettings &&
+    scene.rainbowBubblesSpawned < bubbleSettings.count &&
     now >= scene.nextRainbowBubbleAt
   ) {
     const lane = Math.floor(Math.random() * itemLaneCount);
@@ -2042,8 +2094,8 @@ function updateItems() {
     });
     scene.rainbowBubblesSpawned += 1;
     scene.nextRainbowBubbleAt =
-      scene.rainbowBubblesSpawned < rainbowBubbleLimit
-        ? now + rainbowBubbleInterval
+      scene.rainbowBubblesSpawned < bubbleSettings.count
+        ? now + bubbleSettings.interval
         : Infinity;
   }
 
@@ -2059,7 +2111,7 @@ function updateItems() {
 
     const touchesConductor = itemTouchesConductor(bubble, scene.itemSize * 0.8);
     if (touchesConductor) {
-      scene.invincibleUntil = performance.now() + 5000;
+      scene.invincibleUntil = performance.now() + invincibilityDuration;
       scene.rainbowBubbles.splice(index, 1);
     }
   }
@@ -2342,7 +2394,7 @@ function drawControlsScreen() {
   ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 335);
   ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 377);
   ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 5초간 무적!", scene.width / 2, 415);
+  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 10초간 무적!", scene.width / 2, 415);
   drawMenuButton(getPauseButtonBounds("controlsBack"), "설정으로");
   ctx.textAlign = "start";
 }
@@ -2654,6 +2706,8 @@ function gameLoop() {
     drawHomeScreen();
   } else if (scene.screen === "levels") {
     drawLevelSelectScreen();
+  } else if (scene.screen === "stageIntro") {
+    drawStageIntro();
   } else {
     if (scene.screen === "playing") {
       updateClouds();
