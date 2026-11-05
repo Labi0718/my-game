@@ -25,6 +25,7 @@ const scene = {
   magnets: [], // 스테이지 6에서 등장하는 목표 아이템 유인 아이템
   magnetSpawned: false, // 이번 스테이지에서 자석이 등장했는지 나타낸다.
   nextMagnetAt: Infinity, // 자석 아이템이 등장할 시각
+  invincibleStartedAt: 0, // 무적 효과가 시작된 시각
   invincibleUntil: 0, // 무적 효과가 끝나는 시각
   speedBoostUntil: 0, // 이동 속도 증가 효과가 끝나는 시각
   magnetUntil: 0, // 자석 효과가 끝나는 시각
@@ -130,7 +131,7 @@ const rainbowBubbleSettings = {
 const invincibilityDuration = 10000;
 const speedBoostDuration = 10000;
 const speedBoostMultiplier = 1.8;
-const magnetDuration = 20000;
+const magnetDuration = 15000;
 const magnetRange = 280;
 const magnetPullSpeed = 5;
 const rainbowColors = ["#ff4d6d", "#ff9f1c", "#ffe34d", "#4bd37b", "#37b9ff", "#9d70ff"];
@@ -1609,11 +1610,12 @@ function drawItem(item) {
 // 빛나는 무지개 방울을 그린다.
 function drawRainbowBubble(x, y, size) {
   const pulse = 1 + Math.sin(performance.now() / 120) * 0.08;
+  drawPowerUpAura(x, y, size * 0.9, "rgb(255 205 45 / 68%)");
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(pulse, pulse);
-  ctx.shadowColor = "#ff8df5";
-  ctx.shadowBlur = 12 + pulse * 8;
+  ctx.shadowColor = "#ffd42a";
+  ctx.shadowBlur = 30 + pulse * 18;
   ctx.fillStyle = "rgb(214 250 255 / 62%)";
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 2;
@@ -1765,26 +1767,52 @@ function drawConductor() {
   ctx.scale(scene.conductor.facing, 1);
 
   if (performance.now() < scene.invincibleUntil) {
-    const pulse = 1 + Math.sin(performance.now() / 100) * 0.06;
-    const glow = ctx.createRadialGradient(0, 42, 18, 0, 42, 118 * pulse);
-    glow.addColorStop(0, "rgb(255 255 255 / 4%)");
-    glow.addColorStop(0.58, "rgb(110 220 255 / 20%)");
-    glow.addColorStop(1, "rgb(255 255 255 / 0%)");
+    const time = performance.now();
+    const elapsed = time - scene.invincibleStartedAt;
+    const flash = Math.min(1, Math.max(0, 1 - elapsed / 750));
+    const pulse = 1 + Math.sin(time / 260) * 0.04;
+    const glow = ctx.createRadialGradient(0, 42, 4, 0, 42, (112 + flash * 32) * pulse);
+    glow.addColorStop(0, `rgb(255 255 220 / ${0.7 + flash * 0.3})`);
+    glow.addColorStop(0.45, `rgb(255 220 65 / ${0.46 + flash * 0.4})`);
+    glow.addColorStop(1, "rgb(255 190 0 / 0%)");
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.ellipse(0, 42, 92 * pulse, 128 * pulse, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 42, (88 + flash * 18) * pulse, (112 + flash * 22) * pulse, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowColor = "#ff8df5";
-    ctx.shadowBlur = 16;
-    rainbowColors.forEach((color, index) => {
-      const segment = (Math.PI * 2) / rainbowColors.length;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 6;
+    ctx.shadowColor = "#ffcf00";
+    ctx.shadowBlur = 36 + flash * 30;
+    ctx.strokeStyle = `rgb(255 238 120 / ${0.9 + flash * 0.1})`;
+    ctx.lineWidth = 5 + flash * 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 42, 70 * pulse, 92 * pulse, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let sparkle = 0; sparkle < 6; sparkle += 1) {
+      const phase = time / 260 + sparkle * 2.4;
+      const twinkle = (Math.sin(phase) + 1) / 2;
+      const angle = sparkle * 2.399 + time / 3200;
+      const radius = 72 + (sparkle % 2) * 16 + flash * 10;
+      const x = Math.cos(angle) * radius;
+      const y = 42 + Math.sin(angle) * (radius * 1.25);
+      const size = 2 + twinkle * 4 + flash * 2;
+      ctx.globalAlpha = 0.42 + twinkle * 0.38;
+      ctx.fillStyle = sparkle % 2 === 0 ? "#fffde0" : "#ffe333";
+      ctx.shadowColor = "#ffc800";
+      ctx.shadowBlur = 14 + twinkle * 12 + flash * 12;
       ctx.beginPath();
-      ctx.arc(0, 42, 99 * pulse, index * segment, (index + 0.82) * segment);
-      ctx.stroke();
-    });
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x + size * 0.38, y - size * 0.38);
+      ctx.lineTo(x + size, y);
+      ctx.lineTo(x + size * 0.38, y + size * 0.38);
+      ctx.lineTo(x, y + size);
+      ctx.lineTo(x - size * 0.38, y + size * 0.38);
+      ctx.lineTo(x - size, y);
+      ctx.lineTo(x - size * 0.38, y - size * 0.38);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 
   if (performance.now() < scene.magnetUntil) {
@@ -1827,7 +1855,7 @@ function drawConductor() {
   }
 
   if (performance.now() < scene.speedBoostUntil) {
-    const trailDirection = -scene.conductor.facing;
+    const trailDirection = -1;
     const flicker = Math.sin(performance.now() / 55) * 4;
     ctx.save();
     ctx.lineCap = "round";
@@ -2239,7 +2267,7 @@ function drawStageIntro() {
   ctx.fillStyle = colors.text;
   ctx.font = "17px Arial, 'Malgun Gothic', sans-serif";
   if (isMagnetIntro) {
-    ctx.fillText("빛나는 자석을 먹으면 20초 동안 자석 효과가 지속됩니다.", scene.width / 2, 345);
+    ctx.fillText("빛나는 자석을 먹으면 15초 동안 자석 효과가 지속됩니다.", scene.width / 2, 345);
     ctx.fillText("범위 안의 목표 아이템만 지휘자 쪽으로 끌려옵니다.", scene.width / 2, 378);
     ctx.fillText("방해 아이템은 자석의 영향을 받지 않습니다.", scene.width / 2, 411);
   } else if (isSneakerIntro) {
@@ -2282,6 +2310,7 @@ function startStage(stage) {
   scene.meeting = false;
   scene.gameOver = false;
   scene.invincibleUntil = 0;
+  scene.invincibleStartedAt = 0;
   scene.speedBoostUntil = 0;
   scene.magnetUntil = 0;
   scene.rainbowBubbles = [];
@@ -2405,7 +2434,8 @@ function updateItems() {
 
     const touchesConductor = itemTouchesConductor(bubble, scene.itemSize * 0.8);
     if (touchesConductor) {
-      scene.invincibleUntil = performance.now() + invincibilityDuration;
+      scene.invincibleStartedAt = performance.now();
+      scene.invincibleUntil = scene.invincibleStartedAt + invincibilityDuration;
       scene.rainbowBubbles.splice(index, 1);
     }
   }
