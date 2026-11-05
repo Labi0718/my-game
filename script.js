@@ -227,6 +227,14 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
+  if (
+    event.key === "ArrowUp" ||
+    event.key === "ArrowDown" ||
+    event.code === "Space"
+  ) {
+    event.preventDefault();
+    return;
+  }
   if (scene.screen !== "playing" || scene.gameOver || scene.meeting) return;
   if (event.key === "ArrowLeft") {
     scene.keys.left = true;
