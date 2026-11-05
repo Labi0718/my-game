@@ -19,7 +19,15 @@ const scene = {
   rainbowBubbles: [], // 스테이지 4부터 제한된 횟수만 등장하는 무적 아이템
   rainbowBubblesSpawned: 0, // 이번 스테이지에서 등장한 무지개 방울 수
   nextRainbowBubbleAt: Infinity, // 다음 무지개 방울이 등장할 시각
+  wingedSneakers: [], // 스테이지 5부터 등장하는 이동 속도 증가 아이템
+  wingedSneakersSpawned: 0, // 이번 스테이지에서 등장한 운동화 아이템 수
+  nextWingedSneakerAt: Infinity, // 다음 운동화가 등장할 시각
+  magnets: [], // 스테이지 6에서 등장하는 목표 아이템 유인 아이템
+  magnetSpawned: false, // 이번 스테이지에서 자석이 등장했는지 나타낸다.
+  nextMagnetAt: Infinity, // 자석 아이템이 등장할 시각
   invincibleUntil: 0, // 무적 효과가 끝나는 시각
+  speedBoostUntil: 0, // 이동 속도 증가 효과가 끝나는 시각
+  magnetUntil: 0, // 자석 효과가 끝나는 시각
   pendingStage: null, // 안내 화면을 확인한 뒤 시작할 스테이지
   conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
@@ -120,6 +128,11 @@ const rainbowBubbleSettings = {
   6: { count: 4, interval: 12000 },
 };
 const invincibilityDuration = 10000;
+const speedBoostDuration = 10000;
+const speedBoostMultiplier = 1.8;
+const magnetDuration = 20000;
+const magnetRange = 280;
+const magnetPullSpeed = 5;
 const rainbowColors = ["#ff4d6d", "#ff9f1c", "#ffe34d", "#4bd37b", "#37b9ff", "#9d70ff"];
 
 const stages = {
@@ -1548,6 +1561,14 @@ function drawItem(item) {
     drawRainbowBubble(x, y, scene.itemSize * 1.25);
     return;
   }
+  if (type === "wingedSneaker") {
+    drawWingedSneaker(x, y, scene.itemSize * 1.8);
+    return;
+  }
+  if (type === "glowingMagnet") {
+    drawGlowingMagnet(x, y, scene.itemSize * 1.7);
+    return;
+  }
   // 각 아이콘은 같은 기준 크기에서 그리기 시작한다.
   const size = scene.itemSize;
   // 작은 모양의 방해 아이콘은 해바라기와 비슷하게 보이도록 확대한다.
@@ -1616,6 +1637,89 @@ function drawRainbowBubble(x, y, size) {
   ctx.fillStyle = "rgb(255 255 255 / 88%)";
   ctx.beginPath();
   ctx.ellipse(-size * 0.18, -size * 0.2, size * 0.09, size * 0.17, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawWingedSneaker(x, y, size) {
+  const pulse = 1 + Math.sin(performance.now() / 150) * 0.06;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.15);
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = "#8fffe0";
+  ctx.shadowBlur = 12 + pulse * 8;
+  ctx.fillStyle = "#fff3cf";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.48, size * 0.06);
+  ctx.lineTo(-size * 0.2, size * 0.02);
+  ctx.lineTo(-size * 0.02, -size * 0.28);
+  ctx.lineTo(size * 0.12, -size * 0.12);
+  ctx.lineTo(size * 0.42, -size * 0.08);
+  ctx.quadraticCurveTo(size * 0.55, -size * 0.02, size * 0.48, size * 0.16);
+  ctx.lineTo(size * 0.35, size * 0.28);
+  ctx.lineTo(-size * 0.35, size * 0.28);
+  ctx.quadraticCurveTo(-size * 0.52, size * 0.25, -size * 0.48, size * 0.06);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#4fc3b2";
+  ctx.lineWidth = size * 0.07;
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.28, size * 0.03);
+  ctx.lineTo(-size * 0.08, size * 0.08);
+  ctx.moveTo(-size * 0.2, -size * 0.06);
+  ctx.lineTo(-size * 0.04, size * 0.01);
+  ctx.moveTo(size * 0.18, size * 0.2);
+  ctx.lineTo(size * 0.4, size * 0.2);
+  ctx.stroke();
+  ctx.fillStyle = "#dffcff";
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.26, -size * 0.16);
+  ctx.quadraticCurveTo(-size * 0.55, -size * 0.36, -size * 0.56, -size * 0.06);
+  ctx.quadraticCurveTo(-size * 0.42, -size * 0.12, -size * 0.35, size * 0.02);
+  ctx.quadraticCurveTo(-size * 0.56, size * 0.05, -size * 0.58, size * 0.3);
+  ctx.quadraticCurveTo(-size * 0.3, size * 0.21, -size * 0.2, size * 0.1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawGlowingMagnet(x, y, size) {
+  const pulse = 1 + Math.sin(performance.now() / 130) * 0.07;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = "#8ff6ff";
+  ctx.shadowBlur = 14 + pulse * 8;
+  ctx.strokeStyle = "#ff557a";
+  ctx.lineWidth = size * 0.28;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.38, -size * 0.18);
+  ctx.lineTo(-size * 0.38, size * 0.2);
+  ctx.quadraticCurveTo(-size * 0.38, size * 0.48, 0, size * 0.48);
+  ctx.quadraticCurveTo(size * 0.38, size * 0.48, size * 0.38, size * 0.2);
+  ctx.lineTo(size * 0.38, -size * 0.18);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#e9faff";
+  ctx.lineWidth = size * 0.13;
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.38, -size * 0.18);
+  ctx.lineTo(-size * 0.38, size * 0.2);
+  ctx.quadraticCurveTo(-size * 0.38, size * 0.48, 0, size * 0.48);
+  ctx.quadraticCurveTo(size * 0.38, size * 0.48, size * 0.38, size * 0.2);
+  ctx.lineTo(size * 0.38, -size * 0.18);
+  ctx.stroke();
+  ctx.fillStyle = "#6be7ff";
+  ctx.beginPath();
+  ctx.roundRect(-size * 0.56, -size * 0.34, size * 0.36, size * 0.36, 4);
+  ctx.roundRect(size * 0.2, -size * 0.34, size * 0.36, size * 0.36, 4);
   ctx.fill();
   ctx.restore();
 }
@@ -1864,6 +1968,36 @@ function drawHud() {
     ctx.fillText(`무적 ${invincibilityRemaining.toFixed(1)}초`, lives.x + lives.width / 2, lives.y + 70);
     ctx.textAlign = "start";
   }
+
+  const speedBoostRemaining = (scene.speedBoostUntil - performance.now()) / 1000;
+  if (speedBoostRemaining > 0) {
+    const indicatorY = invincibilityRemaining > 0 ? lives.y + 82 : lives.y + 51;
+    ctx.fillStyle = "rgb(25 91 130 / 92%)";
+    ctx.beginPath();
+    ctx.roundRect(lives.x, indicatorY, lives.width, 27, 7);
+    ctx.fill();
+    ctx.fillStyle = "#dffcff";
+    ctx.textAlign = "center";
+    ctx.font = "bold 13px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText(`속도 증가 ${speedBoostRemaining.toFixed(1)}초`, lives.x + lives.width / 2, indicatorY + 19);
+    ctx.textAlign = "start";
+  }
+
+  const magnetRemaining = (scene.magnetUntil - performance.now()) / 1000;
+  if (magnetRemaining > 0) {
+    const activeEffects =
+      Number(invincibilityRemaining > 0) + Number(speedBoostRemaining > 0);
+    const indicatorY = lives.y + 51 + activeEffects * 31;
+    ctx.fillStyle = "rgb(25 91 130 / 92%)";
+    ctx.beginPath();
+    ctx.roundRect(lives.x, indicatorY, lives.width, 27, 7);
+    ctx.fill();
+    ctx.fillStyle = "#dffcff";
+    ctx.textAlign = "center";
+    ctx.font = "bold 13px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText(`자석 ${magnetRemaining.toFixed(1)}초`, lives.x + lives.width / 2, indicatorY + 19);
+    ctx.textAlign = "start";
+  }
 }
 
 // 지정한 중심 좌표에 라이프를 나타내는 하트 하나를 그린다.
@@ -1961,6 +2095,8 @@ function drawFirstScreen() {
   // 설정에 등록된 해바라기와 방해 아이템을 모두 그린다.
   scene.items.forEach(drawItem);
   scene.rainbowBubbles.forEach(drawItem);
+  scene.wingedSneakers.forEach(drawItem);
+  scene.magnets.forEach(drawItem);
   // 아이템 앞쪽에 지휘자를 그린다.
   drawConductor();
   // 곡 제목, 스테이지 이름과 남은 라이프를 그린다.
@@ -1975,7 +2111,7 @@ function drawFirstScreen() {
 }
 
 function prepareStage(stage) {
-  if (stage === 4) {
+  if (stage === 4 || stage === 5 || stage === 6) {
     scene.pendingStage = stage;
     scene.screen = "stageIntro";
     scene.keys.left = false;
@@ -1990,6 +2126,8 @@ function getStageIntroButtonBounds() {
 }
 
 function drawStageIntro() {
+  const isSneakerIntro = scene.pendingStage === 5;
+  const isMagnetIntro = scene.pendingStage === 6;
   drawMenuBackdrop();
   ctx.fillStyle = "rgb(9 17 34 / 72%)";
   ctx.fillRect(0, 0, scene.width, scene.height);
@@ -2002,15 +2140,36 @@ function drawStageIntro() {
   ctx.textAlign = "center";
   ctx.font = "bold 30px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText("새로운 아이템 등장!", scene.width / 2, 125);
-  ctx.fillText("무지개 방울", scene.width / 2, 174);
-  drawRainbowBubble(scene.width / 2, 260, 48);
+  const itemName = isMagnetIntro
+    ? "빛나는 자석"
+    : isSneakerIntro
+      ? "날개 달린 운동화"
+      : "무지개 방울";
+  ctx.fillText(itemName, scene.width / 2, 174);
+  if (isSneakerIntro) {
+    drawWingedSneaker(scene.width / 2, 260, 94);
+  } else if (isMagnetIntro) {
+    drawGlowingMagnet(scene.width / 2, 260, 94);
+  } else {
+    drawRainbowBubble(scene.width / 2, 260, 48);
+  }
 
   ctx.fillStyle = colors.text;
   ctx.font = "17px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("무지개 방울을 먹으면 10초 동안 무적이 됩니다.", scene.width / 2, 345);
-  ctx.fillText("무적일 때는 방해 아이템에 닿아도 라이프가 줄지 않아요.", scene.width / 2, 378);
-  ctx.fillText("지휘자 주변의 무지개빛 오라로 남은 시간을 확인하세요.", scene.width / 2, 411);
-  drawMenuButton(getStageIntroButtonBounds(), "스테이지 4 시작");
+  if (isMagnetIntro) {
+    ctx.fillText("빛나는 자석을 먹으면 20초 동안 자석 효과가 지속됩니다.", scene.width / 2, 345);
+    ctx.fillText("범위 안의 목표 아이템만 지휘자 쪽으로 끌려옵니다.", scene.width / 2, 378);
+    ctx.fillText("방해 아이템은 자석의 영향을 받지 않습니다.", scene.width / 2, 411);
+  } else if (isSneakerIntro) {
+    ctx.fillText("날개 달린 운동화를 먹으면 10초 동안 이동 속도가 빨라집니다.", scene.width / 2, 345);
+    ctx.fillText("빠르게 이동해 목표 아이템을 모으고 방해 아이템을 피하세요.", scene.width / 2, 378);
+    ctx.fillText("효과가 끝나면 지휘자의 이동 속도가 원래대로 돌아옵니다.", scene.width / 2, 411);
+  } else {
+    ctx.fillText("무지개 방울을 먹으면 10초 동안 무적이 됩니다.", scene.width / 2, 345);
+    ctx.fillText("무적일 때는 방해 아이템에 닿아도 라이프가 줄지 않아요.", scene.width / 2, 378);
+    ctx.fillText("지휘자 주변의 무지개빛 오라로 남은 시간을 확인하세요.", scene.width / 2, 411);
+  }
+  drawMenuButton(getStageIntroButtonBounds(), `스테이지 ${scene.pendingStage} 시작`);
   ctx.textAlign = "start";
 }
 
@@ -2019,8 +2178,12 @@ function updateConductor() {
   if (scene.keys.left !== scene.keys.right) {
     scene.conductor.facing = scene.keys.right ? 1 : -1;
   }
-  if (scene.keys.left) scene.conductor.x -= scene.conductor.speed;
-  if (scene.keys.right) scene.conductor.x += scene.conductor.speed;
+  const speed =
+    performance.now() < scene.speedBoostUntil
+      ? scene.conductor.speed * speedBoostMultiplier
+      : scene.conductor.speed;
+  if (scene.keys.left) scene.conductor.x -= speed;
+  if (scene.keys.right) scene.conductor.x += speed;
 
   const halfWidth = 85 * scene.conductor.scale;
   scene.conductor.x = Math.max(
@@ -2037,8 +2200,14 @@ function startStage(stage) {
   scene.meeting = false;
   scene.gameOver = false;
   scene.invincibleUntil = 0;
+  scene.speedBoostUntil = 0;
+  scene.magnetUntil = 0;
   scene.rainbowBubbles = [];
   scene.rainbowBubblesSpawned = 0;
+  scene.wingedSneakers = [];
+  scene.wingedSneakersSpawned = 0;
+  scene.magnets = [];
+  scene.magnetSpawned = false;
   scene.hud.lives.count = 3;
   scene.gauge.percent = 0;
   scene.conductor.x = scene.width / 2;
@@ -2046,6 +2215,10 @@ function startStage(stage) {
   scene.nextRainbowBubbleAt = rainbowBubbleSettings[stage]
     ? scene.itemsStartAt + 7000
     : Infinity;
+  scene.nextWingedSneakerAt = rainbowBubbleSettings[stage]
+    ? scene.itemsStartAt + 11000
+    : Infinity;
+  scene.nextMagnetAt = stage === 6 ? scene.itemsStartAt + 9000 : Infinity;
   scene.shootingStars = [];
   scene.nextShootingStarAt = performance.now() + 500;
   scene.keys.left = false;
@@ -2099,6 +2272,45 @@ function updateItems() {
         : Infinity;
   }
 
+  if (
+    scene.stage === 6 &&
+    !scene.magnetSpawned &&
+    now >= scene.nextMagnetAt
+  ) {
+    const lane = Math.floor(Math.random() * itemLaneCount);
+    const margin = scene.itemSize * 2;
+    const laneWidth = (scene.width - margin * 2) / itemLaneCount;
+    scene.magnets.push({
+      type: "glowingMagnet",
+      x: margin + laneWidth * (lane + 0.5),
+      y: -scene.itemSize * 2,
+      speed: 3.2,
+    });
+    scene.magnetSpawned = true;
+  }
+
+  if (
+    scene.stage >= 5 &&
+    bubbleSettings &&
+    scene.wingedSneakersSpawned < bubbleSettings.count &&
+    now >= scene.nextWingedSneakerAt
+  ) {
+    const lane = Math.floor(Math.random() * itemLaneCount);
+    const margin = scene.itemSize * 2;
+    const laneWidth = (scene.width - margin * 2) / itemLaneCount;
+    scene.wingedSneakers.push({
+      type: "wingedSneaker",
+      x: margin + laneWidth * (lane + 0.5),
+      y: -scene.itemSize * 2,
+      speed: 3 + Math.random(),
+    });
+    scene.wingedSneakersSpawned += 1;
+    scene.nextWingedSneakerAt =
+      scene.wingedSneakersSpawned < bubbleSettings.count
+        ? now + bubbleSettings.interval
+        : Infinity;
+  }
+
   for (let index = scene.rainbowBubbles.length - 1; index >= 0; index -= 1) {
     const bubble = scene.rainbowBubbles[index];
     bubble.y += bubble.speed;
@@ -2116,9 +2328,52 @@ function updateItems() {
     }
   }
 
+  for (let index = scene.wingedSneakers.length - 1; index >= 0; index -= 1) {
+    const sneaker = scene.wingedSneakers[index];
+    sneaker.y += sneaker.speed;
+    const sneakerRadius = scene.itemSize * 1.5;
+    const grassFloor = scene.conductor.y + 131 * scene.conductor.scale;
+    if (sneaker.y + sneakerRadius >= grassFloor) {
+      scene.wingedSneakers.splice(index, 1);
+      continue;
+    }
+
+    if (itemTouchesConductor(sneaker, scene.itemSize * 0.9)) {
+      scene.speedBoostUntil = performance.now() + speedBoostDuration;
+      scene.wingedSneakers.splice(index, 1);
+    }
+  }
+
+  for (let index = scene.magnets.length - 1; index >= 0; index -= 1) {
+    const magnet = scene.magnets[index];
+    magnet.y += magnet.speed;
+    const magnetRadius = scene.itemSize * 1.5;
+    const grassFloor = scene.conductor.y + 131 * scene.conductor.scale;
+    if (magnet.y + magnetRadius >= grassFloor) {
+      scene.magnets.splice(index, 1);
+      continue;
+    }
+
+    if (itemTouchesConductor(magnet, scene.itemSize * 0.85)) {
+      scene.magnetUntil = performance.now() + magnetDuration;
+      scene.magnets.splice(index, 1);
+    }
+  }
+
   scene.items.forEach((item) => {
     if (scene.gameOver || scene.meeting) return;
     item.y += item.speed;
+    if (
+      item.collectible &&
+      performance.now() < scene.magnetUntil
+    ) {
+      const dx = scene.conductor.x - item.x;
+      const dy = scene.conductor.y - item.y;
+      if (Math.hypot(dx, dy) <= magnetRange) {
+        item.x += Math.sign(dx) * Math.min(Math.abs(dx), magnetPullSpeed);
+        item.y += Math.sign(dy) * Math.min(Math.abs(dy), magnetPullSpeed);
+      }
+    }
 
     const itemRadius = scene.itemSize * 1.5;
     const grassFloor = scene.conductor.y + 131 * scene.conductor.scale;
@@ -2394,7 +2649,8 @@ function drawControlsScreen() {
   ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 335);
   ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 377);
   ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 10초간 무적!", scene.width / 2, 415);
+  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 10초간 무적!", scene.width / 2, 408);
+  ctx.fillText("스테이지 5부터 날개 운동화를 먹으면 10초간 빨라집니다.", scene.width / 2, 439);
   drawMenuButton(getPauseButtonBounds("controlsBack"), "설정으로");
   ctx.textAlign = "start";
 }
