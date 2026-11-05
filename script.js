@@ -2050,11 +2050,16 @@ function updateItems() {
   for (let index = scene.rainbowBubbles.length - 1; index >= 0; index -= 1) {
     const bubble = scene.rainbowBubbles[index];
     bubble.y += bubble.speed;
+    const bubbleRadius = scene.itemSize * 1.5;
+    const grassFloor = scene.conductor.y + 131 * scene.conductor.scale;
+    if (bubble.y + bubbleRadius >= grassFloor) {
+      scene.rainbowBubbles.splice(index, 1);
+      continue;
+    }
+
     const touchesConductor = itemTouchesConductor(bubble, scene.itemSize * 0.8);
     if (touchesConductor) {
       scene.invincibleUntil = performance.now() + 5000;
-      scene.rainbowBubbles.splice(index, 1);
-    } else if (bubble.y > scene.height + scene.itemSize * 2) {
       scene.rainbowBubbles.splice(index, 1);
     }
   }
