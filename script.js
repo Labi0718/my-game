@@ -1643,6 +1643,7 @@ function drawRainbowBubble(x, y, size) {
 
 function drawWingedSneaker(x, y, size) {
   const pulse = 1 + Math.sin(performance.now() / 150) * 0.06;
+  drawPowerUpAura(x, y, size * 0.85, "rgb(105 255 185 / 36%)");
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-0.15);
@@ -1691,6 +1692,7 @@ function drawWingedSneaker(x, y, size) {
 
 function drawGlowingMagnet(x, y, size) {
   const pulse = 1 + Math.sin(performance.now() / 130) * 0.07;
+  drawPowerUpAura(x, y, size * 0.85, "rgb(100 220 255 / 38%)");
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(pulse, pulse);
@@ -1721,6 +1723,27 @@ function drawGlowingMagnet(x, y, size) {
   ctx.roundRect(-size * 0.56, -size * 0.34, size * 0.36, size * 0.36, 4);
   ctx.roundRect(size * 0.2, -size * 0.34, size * 0.36, size * 0.36, 4);
   ctx.fill();
+  ctx.restore();
+}
+
+function drawPowerUpAura(x, y, radius, color) {
+  const pulse = 1 + Math.sin(performance.now() / 170) * 0.12;
+  const aura = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius * 1.35 * pulse);
+  aura.addColorStop(0, color);
+  aura.addColorStop(0.55, color);
+  aura.addColorStop(1, "rgb(255 255 255 / 0%)");
+  ctx.save();
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 1.35 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 17;
+  ctx.strokeStyle = "rgb(255 255 255 / 78%)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, radius * (0.95 + pulse * 0.08), 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -1762,6 +1785,65 @@ function drawConductor() {
       ctx.stroke();
     });
     ctx.shadowBlur = 0;
+  }
+
+  if (performance.now() < scene.magnetUntil) {
+    const time = performance.now() / 180;
+    ctx.save();
+    ctx.translate(0, 42);
+    ctx.shadowColor = "#65eaff";
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 3;
+    for (let band = 0; band < 3; band += 1) {
+      ctx.strokeStyle = band % 2 === 0 ? "#72eaff" : "#c8faff";
+      ctx.beginPath();
+      ctx.ellipse(
+        0,
+        0,
+        80 + band * 11,
+        106 + band * 9,
+        time * (band % 2 === 0 ? 1 : -1),
+        time + band * 1.8,
+        time + band * 1.8 + Math.PI * 1.25,
+      );
+      ctx.stroke();
+    }
+    for (let bolt = 0; bolt < 4; bolt += 1) {
+      const angle = time * (bolt % 2 === 0 ? 1 : -1) + (bolt * Math.PI) / 2;
+      const startX = Math.cos(angle) * 88;
+      const startY = Math.sin(angle) * 113;
+      const endX = Math.cos(angle + 0.24) * 105;
+      const endY = Math.sin(angle + 0.24) * 132;
+      ctx.strokeStyle = bolt % 2 === 0 ? "#d9ffff" : "#58dfff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(startX + (endX - startX) * 0.35 + 7, startY + (endY - startY) * 0.35 - 5);
+      ctx.lineTo(startX + (endX - startX) * 0.62 - 6, startY + (endY - startY) * 0.62 + 5);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (performance.now() < scene.speedBoostUntil) {
+    const trailDirection = -scene.conductor.facing;
+    const flicker = Math.sin(performance.now() / 55) * 4;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.shadowColor = "#7dff16";
+    ctx.shadowBlur = 15;
+    for (let streak = 0; streak < 4; streak += 1) {
+      const y = 105 + streak * 8 + flicker;
+      const length = 28 + (streak % 2) * 13;
+      ctx.strokeStyle = streak % 2 === 0 ? "#b8ff35" : "#60ff19";
+      ctx.lineWidth = 3 - (streak % 2);
+      ctx.beginPath();
+      ctx.moveTo(trailDirection * 30, y);
+      ctx.lineTo(trailDirection * (30 + length), y - 3);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // 걷는 중에는 양쪽 다리의 무릎과 발을 번갈아 움직인다.
