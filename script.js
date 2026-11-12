@@ -1,9 +1,10 @@
+// ===== 준비와 상태 변수 =====
 // HTML에서 id가 "game"인 캔버스 도화지를 찾는다.
 const canvas = document.getElementById("game");
 // 2D 그림을 그리는 데 사용할 붓(ctx)을 가져온다.
 const ctx = canvas.getContext("2d");
-let showDebug = true;
-const showHitbox = true;
+let showDebug = false;
+let showHitbox = false;
 
 // 화면에 놓을 요소의 좌표와 크기를 모아 두어 쉽게 바꿀 수 있게 한다.
 const scene = {
@@ -72,23 +73,6 @@ const colors = {
   good: "#ddff9e", // 목표 아이템 안내 색
   bad: "#ffd1c9", // 목표가 아닌 아이템 안내 색
 };
-
-// 태양 반지름을 기준으로 작은 구름과 큰 구름을 무작위로 만든다.
-function createDriftingCloud(x = Math.random() * scene.width) {
-  const sizeType = Math.floor(Math.random() * 3);
-  const sizeMultiplier = [
-    0.4 + Math.random() * 0.15,
-    0.65,
-    0.8 + Math.random() * 0.15,
-  ][sizeType];
-
-  return {
-    x,
-    y: 40 + Math.random() * 235,
-    radius: scene.sun.radius * sizeMultiplier,
-    speed: 0.35 + Math.random() * 0.45,
-  };
-}
 
 scene.clouds = Array.from({ length: 5 }, () => createDriftingCloud());
 scene.stars = Array.from({ length: 55 }, () => ({
@@ -245,9 +229,13 @@ const stages = {
   },
 };
 
+// ===== 이벤트 =====
 window.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "d") {
-    if (!event.repeat) showDebug = !showDebug;
+    if (!event.repeat) {
+      showDebug = !showDebug;
+      showHitbox = showDebug;
+    }
     event.preventDefault();
     return;
   }
@@ -367,6 +355,24 @@ window.addEventListener("blur", () => {
   scene.keys.right = false;
   scene.draggingVolume = false;
 });
+
+// ===== 함수: 아이템 생성과 배경 그리기 =====
+// 태양 반지름을 기준으로 작은 구름과 큰 구름을 무작위로 만든다.
+function createDriftingCloud(x = Math.random() * scene.width) {
+  const sizeType = Math.floor(Math.random() * 3);
+  const sizeMultiplier = [
+    0.4 + Math.random() * 0.15,
+    0.65,
+    0.8 + Math.random() * 0.15,
+  ][sizeType];
+
+  return {
+    x,
+    y: 40 + Math.random() * 235,
+    radius: scene.sun.radius * sizeMultiplier,
+    speed: 0.35 + Math.random() * 0.45,
+  };
+}
 
 // 아이템 하나의 종류, 위치, 낙하 속도를 각각 무작위로 정한다.
 function createRandomItem(
@@ -1246,6 +1252,7 @@ function drawLandscape() {
 }
 
 // 이 스테이지에서 수집할 유일한 종류의 아이콘인 해바라기를 그린다.
+// ===== 함수: 아이템과 캐릭터 그리기 =====
 function drawSunflowerIcon(x, y, size) {
   // 해바라기 중심을 기준으로 회전해서 꽃잎을 배치할 준비를 한다.
   ctx.save();
@@ -2023,6 +2030,7 @@ function drawConductor() {
   ctx.restore();
 }
 
+// ===== 함수: 화면 UI와 게임 상태 갱신 =====
 // 곡 정보와 스테이지 번호, 남은 라이프를 화면 위쪽에 표시한다.
 function drawHud() {
   // 상단 UI 칸들의 좌표와 크기를 설정에서 꺼낸다.
@@ -3124,6 +3132,7 @@ function drawDebugOverlay() {
   }
 }
 
+// ===== 게임 루프 =====
 // 화면 지우기 → 위치 계산 → 다시 그리기를 반복한다.
 function gameLoop() {
   // 이전 프레임의 그림을 지운다.
@@ -3157,5 +3166,6 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
 
+// ===== 시동 =====
 // 게임 루프를 처음 실행한다.
 gameLoop();
