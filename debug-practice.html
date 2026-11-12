@@ -160,7 +160,7 @@ const rainbowBubbleSettings = {
   6: { count: 4, interval: 12000 },
 };
 const invincibilityDuration = 10000;
-const speedBoostDuration = 10000;
+const speedBoostDuration = 1000;
 const speedBoostMultiplier = 1.8;
 const magnetDuration = 15000;
 const magnetRange = 280;
@@ -186,7 +186,7 @@ const stages = {
     song: "차이콥스키 - 백조의 호수",
     title: "백조",
     target: "swan",
-    targetChance: 5 / 14,
+    targetChance: 1 / 14,
     decoyTypes: allDecoyTypes.filter((type) => type !== "swan"),
     dialogue: [
       "…나를 깨운 건 너구나.",
@@ -2329,8 +2329,8 @@ function updateConductor() {
     performance.now() < scene.speedBoostUntil
       ? scene.conductor.speed * speedBoostMultiplier
       : scene.conductor.speed;
-  if (scene.keys.left) scene.conductor.x += speed;
-  if (scene.keys.right) scene.conductor.x -= speed;
+  if (scene.keys.left) scene.conductor.x -= speed;
+  if (scene.keys.right) scene.conductor.x += speed;
 
   const halfWidth = 85 * scene.conductor.scale;
   scene.conductor.x = Math.max(
