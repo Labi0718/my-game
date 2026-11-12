@@ -2,6 +2,8 @@
 const canvas = document.getElementById("game");
 // 2D 그림을 그리는 데 사용할 붓(ctx)을 가져온다.
 const ctx = canvas.getContext("2d");
+let showDebug = true;
+const showHitbox = true;
 
 // 화면에 놓을 요소의 좌표와 크기를 모아 두어 쉽게 바꿀 수 있게 한다.
 const scene = {
@@ -244,6 +246,11 @@ const stages = {
 };
 
 window.addEventListener("keydown", (event) => {
+  if (event.key.toLowerCase() === "d") {
+    if (!event.repeat) showDebug = !showDebug;
+    event.preventDefault();
+    return;
+  }
   if (event.key === "Escape") {
     if (scene.screen === "playing") scene.screen = "pause";
     else if (scene.screen === "pause") scene.screen = "playing";
@@ -3065,6 +3072,58 @@ function drawStartNotice() {
   ctx.textAlign = "start";
 }
 
+function drawDebugOverlay() {
+  if (!showDebug) return;
+
+  const visibleItems = [
+    ...scene.items,
+    ...scene.rainbowBubbles,
+    ...scene.wingedSneakers,
+    ...scene.magnets,
+  ].filter((item) => item.y >= -scene.itemSize && item.y <= scene.height + scene.itemSize);
+  const gameState = [
+    scene.screen,
+    scene.gameOver ? "gameOver" : "",
+    scene.meeting ? "meeting" : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  const x = 12;
+  const y = scene.height - 120;
+
+  ctx.fillStyle = "rgb(20 32 48 / 82%)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, 220, 108, 8);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "start";
+  ctx.font = "12px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("DEBUG (D 키로 켜기/끄기)", x + 10, y + 20);
+  ctx.fillText(
+    `플레이어: x ${Math.round(scene.conductor.x)}, y ${Math.round(scene.conductor.y)}`,
+    x + 10,
+    y + 40,
+  );
+  ctx.fillText(`화면 아이템 수: ${visibleItems.length}`, x + 10, y + 59);
+  ctx.fillText(`gameState: ${gameState}`, x + 10, y + 78);
+  ctx.fillText(`점수(선율 게이지): ${scene.gauge.percent}%`, x + 10, y + 97);
+
+  if (
+    showHitbox &&
+    scene.screen !== "home" &&
+    scene.screen !== "levels" &&
+    scene.screen !== "stageIntro"
+  ) {
+    const conductor = scene.conductor;
+    const halfWidth = 30 * conductor.scale;
+    const top = conductor.y - 35 * conductor.scale;
+    const height = 155 * conductor.scale;
+    ctx.strokeStyle = "#ff3b5c";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(conductor.x - halfWidth, top, halfWidth * 2, height);
+  }
+}
+
 // 화면 지우기 → 위치 계산 → 다시 그리기를 반복한다.
 function gameLoop() {
   // 이전 프레임의 그림을 지운다.
@@ -3091,6 +3150,8 @@ function gameLoop() {
     if (scene.screen === "pause") drawPauseMenu();
     if (scene.screen === "controls") drawControlsScreen();
   }
+
+  drawDebugOverlay();
 
   // 브라우저에 다음 프레임을 예약한다.
   requestAnimationFrame(gameLoop);
