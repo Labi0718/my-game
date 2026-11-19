@@ -37,6 +37,7 @@ const scene = {
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
   screen: "start", // 시작, 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
   volume: 70, // 사운드 슬라이더 값
+  previousVolume: 70,
   stage: 1, // 현재 진행 중인 스테이지
   retryStage: 1, // 실패 후 다시 시작할 스테이지
   meeting: false, // 게이지를 채우고 무지카를 만나는 화면인지 나타낸다.
@@ -238,6 +239,18 @@ window.addEventListener("keydown", (event) => {
   }
   if (scene.gameOver && event.key.toLowerCase() === "r") {
     resetGame();
+    event.preventDefault();
+    return;
+  }
+  if (event.key.toLowerCase() === "m") {
+    if (!event.repeat) {
+      if (scene.volume > 0) {
+        scene.previousVolume = scene.volume;
+        scene.volume = 0;
+      } else {
+        scene.volume = scene.previousVolume || 70;
+      }
+    }
     event.preventDefault();
     return;
   }
@@ -2639,6 +2652,7 @@ function updateVolumeFromPointer(x) {
   scene.volume = Math.round(
     Math.min(1, Math.max(0, (x - slider.x) / slider.width)) * 100,
   );
+  if (scene.volume > 0) scene.previousVolume = scene.volume;
 }
 
 function drawMenuBackdrop() {
@@ -2696,19 +2710,28 @@ function drawStartScreen() {
   drawMenuBackdrop();
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff3cf";
-  ctx.font = "bold 48px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("선율 수집가", scene.width / 2, 220);
+  const isCompact = canvas.clientWidth < 500;
+  ctx.font = `bold ${isCompact ? 64 : 48}px Arial, 'Malgun Gothic', sans-serif`;
+  ctx.fillText("선율 수집가", scene.width / 2, isCompact ? 210 : 220);
   ctx.fillStyle = colors.text;
-  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText(
-    "목표 아이템을 모아 선율 게이지를 채우고 무지카를 만나세요.",
-    scene.width / 2,
-    278,
-  );
-  ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("조작: 방향키 ← → 로 지휘자를 움직이세요.", scene.width / 2, 316);
+  if (isCompact) {
+    ctx.font = "30px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText("목표 아이템을 모아", scene.width / 2, 270);
+    ctx.fillText("선율 게이지를 채워 무지카를 만나세요.", scene.width / 2, 310);
+    ctx.font = "28px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText("조작: 방향키 ← → 로 지휘자를 움직이세요.", scene.width / 2, 355);
+  } else {
+    ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText(
+      "목표 아이템을 모아 선율 게이지를 채우고 무지카를 만나세요.",
+      scene.width / 2,
+      278,
+    );
+    ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText("조작: 방향키 ← → 로 지휘자를 움직이세요.", scene.width / 2, 316);
+  }
   if (Math.floor(performance.now() / 550) % 2 === 0) {
-    ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
+    ctx.font = `${isCompact ? 30 : 14}px Arial, 'Malgun Gothic', sans-serif`;
     ctx.fillText("아무 키나 눌러 시작", scene.width / 2, 500);
   }
   ctx.textAlign = "start";
@@ -2767,7 +2790,11 @@ function drawPauseMenu() {
 
   ctx.font = "bold 15px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillStyle = colors.text;
-  ctx.fillText(`사운드 볼륨  ${scene.volume}%`, scene.width / 2, 270);
+  ctx.fillText(
+    `사운드 볼륨  ${scene.volume}%${scene.volume === 0 ? " (음소거)" : ""}`,
+    scene.width / 2,
+    270,
+  );
   const slider = getVolumeSliderBounds();
   ctx.fillStyle = "rgb(255 255 255 / 35%)";
   ctx.beginPath();
@@ -2782,7 +2809,8 @@ function drawPauseMenu() {
   ctx.fill();
   ctx.font = "12px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillStyle = "#d8deea";
-  ctx.fillText("사운드 재생 기능은 준비 중입니다.", scene.width / 2, 326);
+  ctx.fillText("M 키로 음소거/해제", scene.width / 2, 320);
+  ctx.fillText("사운드 재생 기능은 준비 중입니다.", scene.width / 2, 340);
   drawMenuButton(getPauseButtonBounds("levels"), "레벨 선택으로");
   drawMenuButton(getPauseButtonBounds("controls"), "조작법 보기");
   ctx.font = "13px Arial, 'Malgun Gothic', sans-serif";
@@ -2802,14 +2830,18 @@ function drawControlsScreen() {
   ctx.textAlign = "center";
   ctx.font = "bold 30px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText("조작 방법", scene.width / 2, 153);
-  ctx.font = "20px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("←  왼쪽으로 이동", scene.width / 2, 225);
-  ctx.fillText("→  오른쪽으로 이동", scene.width / 2, 270);
-  ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 335);
-  ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 377);
-  ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 10초간 무적!", scene.width / 2, 408);
-  ctx.fillText("스테이지 5부터 날개 운동화를 먹으면 10초간 빨라집니다.", scene.width / 2, 439);
+  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("←  왼쪽으로 이동", scene.width / 2, 210);
+  ctx.fillText("→  오른쪽으로 이동", scene.width / 2, 245);
+  ctx.font = "15px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("ESC 일시정지 · M 음소거 · R 게임 오버 시 재시작", scene.width / 2, 286);
+  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 330);
+  ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 365);
+  ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("스테이지 4부터 무지개 방울을 먹으면 10초간 무적!", scene.width / 2, 398);
+  ctx.fillText("스테이지 5부터 날개 운동화를 먹으면 10초간 빨라집니다.", scene.width / 2, 423);
+  ctx.fillText("사운드 재생 기능은 아직 준비 중입니다.", scene.width / 2, 444);
   drawMenuButton(getPauseButtonBounds("controlsBack"), "설정으로");
   ctx.textAlign = "start";
 }
