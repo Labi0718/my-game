@@ -113,6 +113,10 @@ const timedDifficulty = {
   interval: 10000,
   speedIncrease: 0.5,
   maxSpeed: 9,
+  stageOverrides: {
+    5: { speedIncrease: 0.3, maxSpeed: 7.5 },
+    6: { speedIncrease: 0.3, maxSpeed: 7.5 },
+  },
 };
 const allDecoyTypes = [...new Set(itemTypes)].filter(
   (type) => type !== "sunflower" && type !== "crown",
@@ -214,9 +218,9 @@ const stages = {
       "어떤 길을 가도, 난 널 찾아낼 거야.",
     ],
     speeds: [
-      { name: "느리게", min: 3.4, max: 4 },
-      { name: "중간", min: 4.5, max: 5.3 },
-      { name: "빠르게", min: 6, max: 7 },
+      { name: "느리게", min: 3, max: 3.6 },
+      { name: "중간", min: 3.8, max: 4.6 },
+      { name: "빠르게", min: 5.2, max: 6.2 },
     ],
   },
   6: {
@@ -232,9 +236,9 @@ const stages = {
       "이 꽃밭에서 함께 춤춰 보자!",
     ],
     speeds: [
-      { name: "느리게", min: 3.4, max: 4 },
-      { name: "중간", min: 4.5, max: 5.3 },
-      { name: "빠르게", min: 6, max: 7 },
+      { name: "느리게", min: 3, max: 3.6 },
+      { name: "중간", min: 3.8, max: 4.6 },
+      { name: "빠르게", min: 5.2, max: 6.2 },
     ],
   },
 };
@@ -2553,11 +2557,12 @@ function updateItems() {
     }
   }
 
+  const maxSpeed = getTimedDifficultySettings().maxSpeed;
   scene.items.forEach((item) => {
     if (scene.gameOver || scene.meeting) return;
     item.speed =
       scene.stage >= timedDifficulty.firstStage
-        ? Math.min(timedDifficulty.maxSpeed, item.baseSpeed + difficultyBonus)
+        ? Math.min(maxSpeed, item.baseSpeed + difficultyBonus)
         : item.baseSpeed;
     item.y += item.speed;
     if (
@@ -2604,11 +2609,16 @@ function updateItems() {
 
 function getTimedDifficultyBonus(now = performance.now()) {
   if (scene.stage < timedDifficulty.firstStage) return 0;
+  const { maxSpeed, speedIncrease } = getTimedDifficultySettings();
   const elapsed = now - scene.stageStartedAt;
   if (elapsed < timedDifficulty.gracePeriod) return 0;
   const increases =
     1 + Math.floor((elapsed - timedDifficulty.gracePeriod) / timedDifficulty.interval);
-  return Math.min(timedDifficulty.maxSpeed, increases * timedDifficulty.speedIncrease);
+  return Math.min(maxSpeed, increases * speedIncrease);
+}
+
+function getTimedDifficultySettings() {
+  return timedDifficulty.stageOverrides[scene.stage] || timedDifficulty;
 }
 
 function itemTouchesConductor(item, hitRadius) {
