@@ -35,7 +35,7 @@ const scene = {
   pendingStage: null, // 안내 화면을 확인한 뒤 시작할 스테이지
   conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
-  screen: "home", // 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
+  screen: "start", // 시작, 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
   volume: 70, // 사운드 슬라이더 값
   stage: 1, // 현재 진행 중인 스테이지
   retryStage: 1, // 실패 후 다시 시작할 스테이지
@@ -231,6 +231,16 @@ const stages = {
 
 // ===== 이벤트 =====
 window.addEventListener("keydown", (event) => {
+  if (scene.screen === "start") {
+    startStage(1);
+    event.preventDefault();
+    return;
+  }
+  if (scene.gameOver && event.key.toLowerCase() === "r") {
+    resetGame();
+    event.preventDefault();
+    return;
+  }
   if (event.key.toLowerCase() === "d") {
     if (!event.repeat) {
       showDebug = !showDebug;
@@ -2682,6 +2692,28 @@ function drawHomeScreen() {
   ctx.textAlign = "start";
 }
 
+function drawStartScreen() {
+  drawMenuBackdrop();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff3cf";
+  ctx.font = "bold 48px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("선율 수집가", scene.width / 2, 220);
+  ctx.fillStyle = colors.text;
+  ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText(
+    "목표 아이템을 모아 선율 게이지를 채우고 무지카를 만나세요.",
+    scene.width / 2,
+    278,
+  );
+  ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
+  ctx.fillText("조작: 방향키 ← → 로 지휘자를 움직이세요.", scene.width / 2, 316);
+  if (Math.floor(performance.now() / 550) % 2 === 0) {
+    ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
+    ctx.fillText("아무 키나 눌러 시작", scene.width / 2, 500);
+  }
+  ctx.textAlign = "start";
+}
+
 function drawLevelSelectScreen() {
   drawMenuBackdrop();
   ctx.fillStyle = "#fff3cf";
@@ -3138,7 +3170,9 @@ function gameLoop() {
   // 이전 프레임의 그림을 지운다.
   ctx.clearRect(0, 0, scene.width, scene.height);
 
-  if (scene.screen === "home") {
+  if (scene.screen === "start") {
+    drawStartScreen();
+  } else if (scene.screen === "home") {
     drawHomeScreen();
   } else if (scene.screen === "levels") {
     drawLevelSelectScreen();
