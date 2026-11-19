@@ -35,7 +35,9 @@ const scene = {
   pendingStage: null, // 안내 화면을 확인한 뒤 시작할 스테이지
   conductor: { x: 400, y: 408, scale: 0.55, speed: 5, facing: 1 }, // 지휘자의 위치, 크기, 이동 속도와 바라보는 방향
   keys: { left: false, right: false }, // 현재 누르고 있는 좌우 방향키
-  screen: "start", // 시작, 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
+  screen: "start", // 시작, 이야기, 홈, 스테이지 선택, 플레이, 일시정지, 조작법 화면 상태
+  pausedAt: null,
+  stageStartedAt: performance.now(),
   volume: 70, // 사운드 슬라이더 값
   previousVolume: 70,
   stage: 1, // 현재 진행 중인 스테이지
@@ -105,6 +107,13 @@ const itemSpeedLevels = [
   { name: "중간", min: 1.4, max: 1.9 },
   { name: "빠르게", min: 2.4, max: 3.2 },
 ];
+const timedDifficulty = {
+  firstStage: 4,
+  gracePeriod: 10000,
+  interval: 10000,
+  speedIncrease: 0.5,
+  maxSpeed: 9,
+};
 const allDecoyTypes = [...new Set(itemTypes)].filter(
   (type) => type !== "sunflower" && type !== "crown",
 );
@@ -233,12 +242,23 @@ const stages = {
 // ===== 이벤트 =====
 window.addEventListener("keydown", (event) => {
   if (scene.screen === "start") {
+    scene.screen = "story";
+    event.preventDefault();
+    return;
+  }
+  if (scene.screen === "story") {
     startStage(1);
     event.preventDefault();
     return;
   }
   if (scene.gameOver && event.key.toLowerCase() === "r") {
     resetGame();
+    event.preventDefault();
+    return;
+  }
+  if (event.key.toLowerCase() === "p") {
+    if (scene.screen === "playing") pauseGame();
+    else if (scene.screen === "paused") resumeGame();
     event.preventDefault();
     return;
   }
@@ -263,9 +283,9 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (event.key === "Escape") {
-    if (scene.screen === "playing") scene.screen = "pause";
-    else if (scene.screen === "pause") scene.screen = "playing";
-    else if (scene.screen === "controls") scene.screen = "pause";
+    if (scene.screen === "playing") pauseGame();
+    else if (scene.screen === "paused") resumeGame();
+    else if (scene.screen === "controls") scene.screen = "paused";
     scene.keys.left = false;
     scene.keys.right = false;
     event.preventDefault();
@@ -319,9 +339,9 @@ window.addEventListener("click", (event) => {
     }
     return;
   }
-  if (scene.screen === "pause") {
+  if (scene.screen === "paused") {
     if (isInsideButton(x, y, getPauseButtonBounds("resume"))) {
-      scene.screen = "playing";
+      resumeGame();
     } else if (isInsideButton(x, y, getPauseButtonBounds("home"))) {
       scene.screen = "home";
     } else if (isInsideButton(x, y, getPauseButtonBounds("levels"))) {
@@ -333,7 +353,7 @@ window.addEventListener("click", (event) => {
   }
   if (scene.screen === "controls") {
     if (isInsideButton(x, y, getPauseButtonBounds("controlsBack"))) {
-      scene.screen = "pause";
+      scene.screen = "paused";
     }
     return;
   }
@@ -350,7 +370,7 @@ window.addEventListener("click", (event) => {
 });
 
 canvas.addEventListener("pointerdown", (event) => {
-  if (scene.screen !== "pause") return;
+  if (scene.screen !== "paused") return;
   const { x, y } = getCanvasPoint(event);
   const slider = getVolumeSliderBounds();
   if (isInsideButton(x, y, slider)) {
@@ -409,6 +429,8 @@ function createRandomItem(
     : stage.decoyTypes[Math.floor(Math.random() * stage.decoyTypes.length)];
   const speedLevels = stage.speeds;
   const speedLevel = speedLevels[Math.floor(Math.random() * speedLevels.length)];
+  const baseSpeed =
+    speedLevel.min + Math.random() * (speedLevel.max - speedLevel.min);
   const margin = scene.itemSize * 2;
   const laneWidth = (scene.width - margin * 2) / itemLaneCount;
 
@@ -417,7 +439,8 @@ function createRandomItem(
     x: margin + laneWidth * (lane + 0.5),
     lane,
     y,
-    speed: speedLevel.min + Math.random() * (speedLevel.max - speedLevel.min),
+    speed: baseSpeed,
+    baseSpeed,
     speedLevel: speedLevel.name,
     collectible: type === stage.target,
   };
@@ -2361,6 +2384,8 @@ function startStage(stage) {
   scene.gauge.percent = 0;
   scene.conductor.x = scene.width / 2;
   scene.itemsStartAt = performance.now() + 2000;
+  scene.stageStartedAt = scene.itemsStartAt;
+  scene.pausedAt = null;
   scene.nextRainbowBubbleAt = rainbowBubbleSettings[stage]
     ? scene.itemsStartAt + 7000
     : Infinity;
@@ -2396,9 +2421,27 @@ function resetGame() {
   startStage(scene.retryStage);
 }
 
+function pauseGame() {
+  if (scene.gameOver || scene.meeting || scene.screen !== "playing") return;
+  scene.screen = "paused";
+  scene.pausedAt = performance.now();
+  scene.keys.left = false;
+  scene.keys.right = false;
+}
+
+function resumeGame() {
+  if (scene.screen !== "paused") return;
+  if (scene.pausedAt !== null) {
+    scene.stageStartedAt += performance.now() - scene.pausedAt;
+  }
+  scene.pausedAt = null;
+  scene.screen = "playing";
+}
+
 // 아이템마다 따로 떨어뜨리고, 잔디에 닿거나 지휘자와 부딪히면 처리한다.
 function updateItems() {
   const now = performance.now();
+  const difficultyBonus = getTimedDifficultyBonus(now);
   const bubbleSettings = rainbowBubbleSettings[scene.stage];
   if (
     bubbleSettings &&
@@ -2512,6 +2555,10 @@ function updateItems() {
 
   scene.items.forEach((item) => {
     if (scene.gameOver || scene.meeting) return;
+    item.speed =
+      scene.stage >= timedDifficulty.firstStage
+        ? Math.min(timedDifficulty.maxSpeed, item.baseSpeed + difficultyBonus)
+        : item.baseSpeed;
     item.y += item.speed;
     if (
       item.collectible &&
@@ -2553,6 +2600,15 @@ function updateItems() {
       resetItem(item);
     }
   });
+}
+
+function getTimedDifficultyBonus(now = performance.now()) {
+  if (scene.stage < timedDifficulty.firstStage) return 0;
+  const elapsed = now - scene.stageStartedAt;
+  if (elapsed < timedDifficulty.gracePeriod) return 0;
+  const increases =
+    1 + Math.floor((elapsed - timedDifficulty.gracePeriod) / timedDifficulty.interval);
+  return Math.min(timedDifficulty.maxSpeed, increases * timedDifficulty.speedIncrease);
 }
 
 function itemTouchesConductor(item, hitRadius) {
@@ -2702,7 +2758,7 @@ function drawHomeScreen() {
   ctx.fillText("별빛과 선율을 모으러 떠나볼까요?", scene.width / 2, 272);
   drawMenuButton(getHomeButtonBounds(), "레벨 선택");
   ctx.font = "14px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("이동: ← →   |   일시정지: ESC", scene.width / 2, 485);
+  ctx.fillText("이동: ← →   |   일시정지: P / ESC", scene.width / 2, 485);
   ctx.textAlign = "start";
 }
 
@@ -2711,28 +2767,41 @@ function drawStartScreen() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff3cf";
   const isCompact = canvas.clientWidth < 500;
-  ctx.font = `bold ${isCompact ? 64 : 48}px Arial, 'Malgun Gothic', sans-serif`;
-  ctx.fillText("선율 수집가", scene.width / 2, isCompact ? 210 : 220);
-  ctx.fillStyle = colors.text;
-  if (isCompact) {
-    ctx.font = "30px Arial, 'Malgun Gothic', sans-serif";
-    ctx.fillText("목표 아이템을 모아", scene.width / 2, 270);
-    ctx.fillText("선율 게이지를 채워 무지카를 만나세요.", scene.width / 2, 310);
-    ctx.font = "28px Arial, 'Malgun Gothic', sans-serif";
-    ctx.fillText("조작: 방향키 ← → 로 지휘자를 움직이세요.", scene.width / 2, 355);
-  } else {
-    ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
-    ctx.fillText(
-      "목표 아이템을 모아 선율 게이지를 채우고 무지카를 만나세요.",
-      scene.width / 2,
-      278,
-    );
-    ctx.font = "16px Arial, 'Malgun Gothic', sans-serif";
-    ctx.fillText("조작: 방향키 ← → 로 지휘자를 움직이세요.", scene.width / 2, 316);
-  }
+  ctx.font = `bold ${isCompact ? 50 : 40}px Arial, 'Malgun Gothic', sans-serif`;
+  ctx.fillText("선율 수집가", scene.width / 2, 285);
   if (Math.floor(performance.now() / 550) % 2 === 0) {
-    ctx.font = `${isCompact ? 30 : 14}px Arial, 'Malgun Gothic', sans-serif`;
-    ctx.fillText("아무 키나 눌러 시작", scene.width / 2, 500);
+    ctx.fillStyle = colors.text;
+    ctx.font = `${isCompact ? 26 : 14}px Arial, 'Malgun Gothic', sans-serif`;
+    ctx.fillText("아무 키나 눌러 계속", scene.width / 2, 500);
+  }
+  ctx.textAlign = "start";
+}
+
+function drawStoryScreen() {
+  drawMenuBackdrop();
+  const isCompact = canvas.clientWidth < 500;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff3cf";
+  ctx.font = `bold ${isCompact ? 44 : 32}px Arial, 'Malgun Gothic', sans-serif`;
+  ctx.fillText("사라진 음악을 찾아서", scene.width / 2, isCompact ? 112 : 118);
+
+  ctx.fillStyle = colors.text;
+  ctx.font = `${isCompact ? 27 : 18}px Arial, 'Malgun Gothic', sans-serif`;
+  ctx.fillText("이 세상에서 음악이 사라졌습니다.", scene.width / 2, isCompact ? 178 : 180);
+  ctx.fillText("흩어진 음악들을 찾아 동료로 만들고,", scene.width / 2, isCompact ? 218 : 213);
+  ctx.fillText("세상에 음악을 되찾아 주세요.", scene.width / 2, isCompact ? 258 : 246);
+
+  ctx.font = `${isCompact ? 25 : 17}px Arial, 'Malgun Gothic', sans-serif`;
+  ctx.fillText("← / → 방향키로 지휘자를 움직이세요.", scene.width / 2, isCompact ? 326 : 330);
+  ctx.fillText("목표 파편은 모으고, 방해 파편은 피하세요.", scene.width / 2, isCompact ? 366 : 365);
+  ctx.fillText(
+    "P / ESC: 일시정지 · 게임 오버 시 R: 다시 시작",
+    scene.width / 2,
+    isCompact ? 406 : 400,
+  );
+  if (Math.floor(performance.now() / 550) % 2 === 0) {
+    ctx.font = `${isCompact ? 26 : 14}px Arial, 'Malgun Gothic', sans-serif`;
+    ctx.fillText("아무 키나 눌러 모험 시작", scene.width / 2, 520);
   }
   ctx.textAlign = "start";
 }
@@ -2815,7 +2884,7 @@ function drawPauseMenu() {
   drawMenuButton(getPauseButtonBounds("controls"), "조작법 보기");
   ctx.font = "13px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillStyle = "#d8deea";
-  ctx.fillText("ESC를 눌러 계속하기", scene.width / 2, 500);
+  ctx.fillText("P 또는 ESC를 눌러 계속하기", scene.width / 2, 500);
   ctx.textAlign = "start";
 }
 
@@ -2834,7 +2903,7 @@ function drawControlsScreen() {
   ctx.fillText("←  왼쪽으로 이동", scene.width / 2, 210);
   ctx.fillText("→  오른쪽으로 이동", scene.width / 2, 245);
   ctx.font = "15px Arial, 'Malgun Gothic', sans-serif";
-  ctx.fillText("ESC 일시정지 · M 음소거 · R 게임 오버 시 재시작", scene.width / 2, 286);
+  ctx.fillText("P / ESC 일시정지 · M 음소거 · R 게임 오버 시 재시작", scene.width / 2, 286);
   ctx.font = "18px Arial, 'Malgun Gothic', sans-serif";
   ctx.fillText("목표 아이템을 모아 선율 게이지를 채우세요.", scene.width / 2, 330);
   ctx.fillText("방해 아이템에 세 번 닿으면 게임 오버!", scene.width / 2, 365);
@@ -3204,6 +3273,8 @@ function gameLoop() {
 
   if (scene.screen === "start") {
     drawStartScreen();
+  } else if (scene.screen === "story") {
+    drawStoryScreen();
   } else if (scene.screen === "home") {
     drawHomeScreen();
   } else if (scene.screen === "levels") {
@@ -3222,7 +3293,7 @@ function gameLoop() {
     }
 
     drawFirstScreen();
-    if (scene.screen === "pause") drawPauseMenu();
+    if (scene.screen === "paused") drawPauseMenu();
     if (scene.screen === "controls") drawControlsScreen();
   }
 
